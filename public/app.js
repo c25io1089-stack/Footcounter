@@ -62,22 +62,58 @@
   }
   const gran = () => { const d = rangeDates().days; return d <= 2 ? 'hour' : d <= 120 ? 'day' : 'week'; };
 
-  function toast(msg, ms = 2500) { const t = document.createElement('div'); t.className = 'toast'; t.textContent = msg; document.body.appendChild(t); setTimeout(() => t.remove(), ms); }
+  // Toast: type = 'success' | 'error' | 'info' (анхдагч success)
+  const TOAST_ICO = {
+    success: '<svg class="ti" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="m8.5 12.5 2.3 2.3 4.7-5"/></svg>',
+    error: '<svg class="ti" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/></svg>',
+    info: '<svg class="ti" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>',
+  };
+  function toast(msg, type = 'success', ms = 3200) {
+    let host = $('.toasts'); if (!host) { host = document.createElement('div'); host.className = 'toasts'; document.body.appendChild(host); }
+    const t = document.createElement('div'); t.className = 'toast ' + type; t.setAttribute('role', 'status');
+    t.innerHTML = TOAST_ICO[type] + '<div></div>'; t.lastChild.textContent = msg; host.appendChild(t);
+    setTimeout(() => { t.classList.add('out'); setTimeout(() => t.remove(), 220); }, ms);
+  }
+  // Modal: × товч, ESC, арын дарамт — бүгд хаана. onMount(bg, close)
   function modal(html, onMount) {
     const bg = document.createElement('div'); bg.className = 'modal-bg';
-    bg.innerHTML = `<div class="modal">${html}</div>`;
-    bg.addEventListener('click', (e) => { if (e.target === bg) bg.remove(); });
+    bg.innerHTML = `<div class="modal" role="dialog" aria-modal="true"><button class="x" type="button" aria-label="Хаах">✕</button>${html}</div>`;
+    const close = () => { if (!bg.isConnected) return; bg.remove(); document.removeEventListener('keydown', onKey); };
+    const onKey = (e) => { if (e.key === 'Escape') close(); };
+    bg.addEventListener('click', (e) => { if (e.target === bg) close(); });
+    bg.querySelector('.modal > .x').onclick = close;
+    document.addEventListener('keydown', onKey);
     document.body.appendChild(bg);
-    onMount && onMount(bg, () => bg.remove());
+    const first = bg.querySelector('input:not([type=hidden]), select, button:not(.x)'); if (first) setTimeout(() => first.focus(), 30);
+    onMount && onMount(bg, close);
     return bg;
   }
+  // Баталгаажуулах диалог (native confirm-ийн оронд) → Promise<boolean>
+  function confirmDlg(message, { title = 'Баталгаажуулах', ok = 'Тийм, үргэлжлүүлэх', danger = true } = {}) {
+    return new Promise((resolve) => {
+      modal(`<h2>${esc(title)}</h2><p style="margin:0;color:var(--text-2)">${esc(message)}</p><div class="actions"><button type="button" class="btn" data-no>Болих</button><button type="button" class="btn ${danger ? 'danger' : 'primary'}" data-yes>${esc(ok)}</button></div>`,
+        (bg, close) => {
+          let done = false; const fin = (v) => { if (done) return; done = true; close(); resolve(v); };
+          bg.querySelector('[data-no]').onclick = () => fin(false); bg.querySelector('[data-yes]').onclick = () => fin(true);
+          bg.querySelector('.modal > .x').onclick = () => fin(false); bg.addEventListener('click', (e) => { if (e.target === bg) fin(false); });
+          setTimeout(() => bg.querySelector('[data-yes]').focus(), 30);
+        });
+    });
+  }
+  // Товчны loading төлөв: await withLoading(btn, async () => …)
+  async function withLoading(btn, fn) { if (!btn) return fn(); btn.classList.add('loading'); try { return await fn(); } finally { btn.classList.remove('loading'); } }
+  const initials = (s) => String(s || '?').trim().split(/[\s@._-]+/).filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join('') || '?';
+  const skeleton = () => `<div class="grid g-kpi"><div class="skeleton sk-kpi"></div><div class="skeleton sk-kpi"></div><div class="skeleton sk-kpi"></div><div class="skeleton sk-kpi"></div></div><div class="grid g-2 section"><div class="skeleton sk-block"></div><div class="skeleton sk-block"></div></div>`;
 
   // ---- Chart helpers (Chart.js) ----
   function chartDefaults() {
     Chart.defaults.color = css('--text-2'); Chart.defaults.borderColor = css('--border');
     Chart.defaults.font.family = getComputedStyle(document.body).fontFamily; Chart.defaults.font.size = 12;
-    Chart.defaults.plugins.legend.labels.boxWidth = 10; Chart.defaults.plugins.legend.labels.boxHeight = 10;
+    Chart.defaults.plugins.legend.labels.boxWidth = 10; Chart.defaults.plugins.legend.labels.boxHeight = 10; Chart.defaults.plugins.legend.labels.usePointStyle = true; Chart.defaults.plugins.legend.labels.pointStyle = 'circle';
     Chart.defaults.plugins.tooltip.backgroundColor = css('--text'); Chart.defaults.plugins.tooltip.titleColor = css('--bg'); Chart.defaults.plugins.tooltip.bodyColor = css('--bg');
+    Chart.defaults.plugins.tooltip.padding = 10; Chart.defaults.plugins.tooltip.cornerRadius = 8; Chart.defaults.plugins.tooltip.displayColors = true; Chart.defaults.plugins.tooltip.boxPadding = 4;
+    Chart.defaults.elements.bar.borderRadius = 5; Chart.defaults.elements.bar.borderSkipped = false; Chart.defaults.elements.line.borderWidth = 2; Chart.defaults.elements.point.radius = 0; Chart.defaults.elements.point.hoverRadius = 4;
+    Chart.defaults.scales.linear.ticks.padding = 6; Chart.defaults.scales.category.ticks.padding = 4; Chart.defaults.animation.duration = 500;
   }
   function mk(id, cfg) { const el = $('#' + id); if (!el) return; if (charts[id]) charts[id].destroy(); charts[id] = new Chart(el, cfg); }
   const bucketLabel = (b, g) => { const d = new Date(b + 'Z'); return g === 'hour' ? d.getUTCHours().toString().padStart(2, '0') + ':00' : g === 'week' ? d.getUTCMonth() + 1 + '/' + d.getUTCDate() + ' 7х' : d.getUTCMonth() + 1 + '/' + d.getUTCDate(); };
@@ -85,37 +121,50 @@
   // ================= LOGIN =================
   function renderLogin(err = '') {
     killCharts();
-    app.innerHTML = `<div class="login"><div class="card">
-      <div class="brand"><div class="logo">F</div><div><b>Footfall</b><small>Хүний урсгалын систем</small></div></div>
-      <h1>Нэвтрэх</h1><p>Бүртгэлтэй и-мэйл, нууц үгээ оруулна уу.</p>
-      <form class="form" id="loginForm">
-        <label>И-мэйл<input type="email" name="email" required autocomplete="username"></label>
-        <label>Нууц үг<input type="password" name="password" required autocomplete="current-password"></label>
-        <div class="err" id="loginErr">${esc(err)}</div>
-        <button class="btn primary" type="submit">Нэвтрэх</button>
-      </form></div></div>`;
+    app.innerHTML = `<div class="login">
+      <aside class="hero">
+        <div class="brand"><div class="logo">F</div><div><b>Footfall</b><small>Хүний урсгалын систем</small></div></div>
+        <div>
+          <h2>Дэлгүүрийнхээ урсгалыг<br>тоогоор удирд.</h2>
+          <p>HX-CCD21 3D AI тоологчоос ирэх орсон, гарсан, өнгөрсөн хүний тоо, зочны нас, хүйс, давхардалгүй зочид — олон байршил, бодит цагт.</p>
+          <ul><li>Бодит цагийн орсон/гарсан ба одоо байгаа хүн</li><li>Долоо хоногийн өдөр × цагийн нягтрал</li><li>Зочны портрет, REID давхардалгүй зочид</li><li>ERP/BI-д зориулсан REST API</li></ul>
+        </div>
+        <div class="foot">© ${new Date().getFullYear()} Footfall · Chipmo</div>
+      </aside>
+      <div class="pane"><div class="card">
+        <div class="brand"><div class="logo">F</div><div><b>Footfall</b><small>Хүний урсгалын систем</small></div></div>
+        <h1>Нэвтрэх</h1><p>Бүртгэлтэй и-мэйл, нууц үгээ оруулна уу.</p>
+        <form class="form" id="loginForm" novalidate>
+          <label>И-мэйл<input type="email" name="email" required autocomplete="username" placeholder="name@company.mn" autofocus></label>
+          <label>Нууц үг<input type="password" name="password" required autocomplete="current-password" placeholder="••••••••"></label>
+          <div class="err" id="loginErr" role="alert">${esc(err)}</div>
+          <button class="btn primary" type="submit">Нэвтрэх</button>
+        </form></div></div></div>`;
     $('#loginForm').addEventListener('submit', async (e) => {
       e.preventDefault();
       const f = new FormData(e.target);
-      try { await api('/dash/auth/login', { method: 'POST', body: { email: f.get('email'), password: f.get('password') } }); await boot(); }
-      catch (err) { $('#loginErr').textContent = err.message; }
+      if (!f.get('email') || !f.get('password')) { $('#loginErr').textContent = 'И-мэйл, нууц үгээ оруулна уу'; return; }
+      await withLoading(e.target.querySelector('button[type=submit]'), async () => {
+        try { await api('/dash/auth/login', { method: 'POST', body: { email: f.get('email'), password: f.get('password') } }); await boot(); }
+        catch (err) { $('#loginErr').textContent = err.message; }
+      });
     });
   }
 
   // ================= SHELL =================
   // Superadmin: байгууллагуудын хяналтын самбар + төхөөрөмж + тохиргоо (байгууллагын урсгалын өгөгдөл харахгүй)
   const NAV_SUPER = [
-    ['admin', 'Байгууллагууд', 'M12 7V3H2v18h20V7H12zM6 19H4v-2h2v2zm0-4H4v-2h2v2zm0-4H4V9h2v2zm0-4H4V5h2v2zm4 12H8v-2h2v2zm0-4H8v-2h2v2zm0-4H8V9h2v2zm0-4H8V5h2v2zm10 12h-8v-2h2v-2h-2v-2h2v-2h-2V9h8v10zm-2-8h-2v2h2v-2zm0 4h-2v2h2v-2z'],
-    ['devices', 'Төхөөрөмж', 'M4 6h16v10H4zM2 18h20v2H2z'],
-    ['settings', 'Тохиргоо', 'M19.4 13a7.7 7.7 0 000-2l2.1-1.6-2-3.5-2.5 1a7.4 7.4 0 00-1.7-1L15 3H9l-.4 2.7a7.4 7.4 0 00-1.7 1l-2.5-1-2 3.5L4.6 11a7.7 7.7 0 000 2l-2.1 1.6 2 3.5 2.5-1c.5.4 1.1.7 1.7 1L9 21h6l.4-2.7c.6-.3 1.2-.6 1.7-1l2.5 1 2-3.5L19.4 13zM12 15.5a3.5 3.5 0 110-7 3.5 3.5 0 010 7z'],
+    ['admin', 'Байгууллагууд', 'M12 7V3H2v18h20V7H12zM6 19H4v-2h2v2zm0-4H4v-2h2v2zm0-4H4V9h2v2zm0-4H4V5h2v2zm4 12H8v-2h2v2zm0-4H8v-2h2v2zm0-4H8V9h2v2zm0-4H8V5h2v2zm10 12h-8v-2h2v-2h-2v-2h2v-2h-2V9h8v10zm-2-8h-2v2h2v-2zm0 4h-2v2h2v-2z', 'Бүх байгууллагын төлөв, төхөөрөмж, хэрэглэгч — нэг дэлгэцэнд'],
+    ['devices', 'Төхөөрөмж', 'M4 6h16v10H4zM2 18h20v2H2z', 'Online/offline төлөв, холболт, firmware, тохиргоо'],
+    ['settings', 'Тохиргоо', 'M19.4 13a7.7 7.7 0 000-2l2.1-1.6-2-3.5-2.5 1a7.4 7.4 0 00-1.7-1L15 3H9l-.4 2.7a7.4 7.4 0 00-1.7 1l-2.5-1-2 3.5L4.6 11a7.7 7.7 0 000 2l-2.1 1.6 2 3.5 2.5-1c.5.4 1.1.7 1.7 1L9 21h6l.4-2.7c.6-.3 1.2-.6 1.7-1l2.5 1 2-3.5L19.4 13zM12 15.5a3.5 3.5 0 110-7 3.5 3.5 0 010 7z', 'Байгууллага, байршил, хэрэглэгч, API түлхүүр, лог'],
   ];
   const NAV_TENANT = [
-    ['overview', 'Тойм', 'M3 13h8V3H3v10zm10 8h8V11h-8v10zM3 21h8v-6H3v6zm10-18v6h8V3h-8z'],
-    ['locations', 'Байршил', 'M12 2C8.1 2 5 5.1 5 9c0 5.3 7 13 7 13s7-7.7 7-13c0-3.9-3.1-7-7-7zm0 9.5a2.5 2.5 0 110-5 2.5 2.5 0 010 5z'],
-    ['devices', 'Төхөөрөмж', 'M4 6h16v10H4zM2 18h20v2H2z'],
-    ['demographics', 'Зочны портрет', 'M16 11c1.7 0 3-1.3 3-3s-1.3-3-3-3-3 1.3-3 3 1.3 3 3 3zm-8 0c1.7 0 3-1.3 3-3S9.7 5 8 5 5 6.3 5 8s1.3 3 3 3zm0 2c-2.3 0-7 1.2-7 3.5V19h14v-2.5C15 14.2 10.3 13 8 13zm8 0c-.3 0-.6 0-1 .1 1.2.8 2 2 2 3.4V19h6v-2.5c0-2.3-4.7-3.5-7-3.5z'],
-    ['reid', 'Давхардалгүй зочид', 'M12 4a4 4 0 110 8 4 4 0 010-8zm0 10c4.4 0 8 1.8 8 4v2H4v-2c0-2.2 3.6-4 8-4z'],
-    ['settings', 'Тохиргоо', 'M19.4 13a7.7 7.7 0 000-2l2.1-1.6-2-3.5-2.5 1a7.4 7.4 0 00-1.7-1L15 3H9l-.4 2.7a7.4 7.4 0 00-1.7 1l-2.5-1-2 3.5L4.6 11a7.7 7.7 0 000 2l-2.1 1.6 2 3.5 2.5-1c.5.4 1.1.7 1.7 1L9 21h6l.4-2.7c.6-.3 1.2-.6 1.7-1l2.5 1 2-3.5L19.4 13zM12 15.5a3.5 3.5 0 110-7 3.5 3.5 0 010 7z'],
+    ['overview', 'Тойм', 'M3 13h8V3H3v10zm10 8h8V11h-8v10zM3 21h8v-6H3v6zm10-18v6h8V3h-8z', 'Орсон, гарсан, одоо байгаа хүн, цагийн нягтрал'],
+    ['locations', 'Байршил', 'M12 2C8.1 2 5 5.1 5 9c0 5.3 7 13 7 13s7-7.7 7-13c0-3.9-3.1-7-7-7zm0 9.5a2.5 2.5 0 110-5 2.5 2.5 0 010 5z', 'Байршил бүрийн урсгал, орох хувь, төхөөрөмжийн төлөв'],
+    ['devices', 'Төхөөрөмж', 'M4 6h16v10H4zM2 18h20v2H2z', 'Online/offline төлөв, холболт, firmware, тохиргоо'],
+    ['demographics', 'Зочны портрет', 'M16 11c1.7 0 3-1.3 3-3s-1.3-3-3-3-3 1.3-3 3 1.3 3 3 3zm-8 0c1.7 0 3-1.3 3-3S9.7 5 8 5 5 6.3 5 8s1.3 3 3 3zm0 2c-2.3 0-7 1.2-7 3.5V19h14v-2.5C15 14.2 10.3 13 8 13zm8 0c-.3 0-.6 0-1 .1 1.2.8 2 2 2 3.4V19h6v-2.5c0-2.3-4.7-3.5-7-3.5z', 'Нас, хүйс, ажилтан, тэргэнцэр, давхардал арилгасан бүтэц'],
+    ['reid', 'Давхардалгүй зочид', 'M12 4a4 4 0 110 8 4 4 0 010-8zm0 10c4.4 0 8 1.8 8 4v2H4v-2c0-2.2 3.6-4 8-4z', 'REID-ээр танигдсан давхардалгүй зочид, давтан ирэлт, байх хугацаа'],
+    ['settings', 'Тохиргоо', 'M19.4 13a7.7 7.7 0 000-2l2.1-1.6-2-3.5-2.5 1a7.4 7.4 0 00-1.7-1L15 3H9l-.4 2.7a7.4 7.4 0 00-1.7 1l-2.5-1-2 3.5L4.6 11a7.7 7.7 0 000 2l-2.1 1.6 2 3.5 2.5-1c.5.4 1.1.7 1.7 1L9 21h6l.4-2.7c.6-.3 1.2-.6 1.7-1l2.5 1 2-3.5L19.4 13zM12 15.5a3.5 3.5 0 110-7 3.5 3.5 0 010 7z', 'Байршил, хэрэглэгч, API түлхүүр, API баримт'],
   ];
   let NAV = NAV_TENANT;
   function renderShell() {
@@ -125,11 +174,14 @@
         <div class="brand"><div class="logo">F</div><div><b>Footfall</b><small>${esc(state.tenant ? state.tenant.name : 'Бүх байгууллага')}</small></div></div>
         <nav class="nav">${NAV.map(([k, t, d]) => `<a href="#${k}" data-page="${k}"><svg viewBox="0 0 24 24" fill="currentColor"><path d="${d}"/></svg><span>${t}</span></a>`).join('')}</nav>
         <div class="spacer"></div>
-        <div class="userbox"><b>${esc(state.user.name || state.user.email)}</b>${esc(state.user.email)} · ${roleName(state.user.role)}<br>
-          <a href="#" id="pwBtn">Нууц үг солих</a> · <a href="#" id="logoutBtn">Гарах</a></div>
+        <div class="userbox"><div class="avatar">${esc(initials(state.user.name || state.user.email))}</div><div class="who"><b>${esc(state.user.name || state.user.email)}</b><span>${roleName(state.user.role)}</span>
+          <div class="links"><a href="#" id="pwBtn">Нууц үг солих</a> · <a href="#" id="logoutBtn">Гарах</a></div></div></div>
       </aside>
       <main class="main">
-        <div class="topbar"><h1 id="pageTitle"></h1>
+        <div class="topbar"><div class="title"><h1 id="pageTitle"></h1><p class="page-sub" id="pageSub"></p></div>
+          <div class="umenu"><button class="avatar" id="umBtn" aria-label="Хэрэглэгчийн цэс">${esc(initials(state.user.name || state.user.email))}</button>
+            <div class="pop" id="umPop" hidden><div class="who"><b>${esc(state.user.name || state.user.email)}</b>${esc(state.user.email)} · ${roleName(state.user.role)}</div>
+              <button type="button" id="umPw">Нууц үг солих</button><button type="button" class="danger" id="umOut">Гарах</button></div></div>
           <div class="filters" id="globalFilters">
             ${isSuper ? `<select id="fTenant"><option value="">Бүх байгууллага</option>${state.tenants.map((t) => `<option value="${t.id}" ${String(t.id) === String(state.tenantId) ? 'selected' : ''}>${esc(t.name)}</option>`).join('')}</select>` : ''}
             <select id="fLocation"></select>
@@ -141,8 +193,11 @@
         <div id="page"></div>
       </main></div>`;
     fillLocationSelects();
-    $('#logoutBtn').onclick = async (e) => { e.preventDefault(); await api('/dash/auth/logout', { method: 'POST' }); location.hash = ''; renderLogin(); };
-    $('#pwBtn').onclick = (e) => { e.preventDefault(); passwordModal(); };
+    const logout = async (e) => { e && e.preventDefault(); await api('/dash/auth/logout', { method: 'POST' }); location.hash = ''; state.user = null; renderLogin(); };
+    $('#logoutBtn').onclick = logout; $('#umOut').onclick = logout;
+    $('#pwBtn').onclick = (e) => { e.preventDefault(); passwordModal(); }; $('#umPw').onclick = () => { $('#umPop').hidden = true; passwordModal(); };
+    $('#umBtn').onclick = (e) => { e.stopPropagation(); $('#umPop').hidden = !$('#umPop').hidden; };
+    document.addEventListener('click', (e) => { const p = $('#umPop'); if (p && !p.hidden && !e.target.closest('.umenu')) p.hidden = true; });
     if (isSuper) $('#fTenant').onchange = async (e) => { state.tenantId = e.target.value; state.locationId = ''; state.sn = ''; await loadMeta(); fillLocationSelects(); render(); };
     $('#fLocation').onchange = (e) => { state.locationId = e.target.value; state.sn = ''; fillLocationSelects(); render(); };
     $('#fDevice').onchange = (e) => { state.sn = e.target.value; render(); };
@@ -183,12 +238,15 @@
     const page = (location.hash || '#' + home).slice(1).split('/')[0];
     state.page = NAV.some((n) => n[0] === page) ? page : home;
     document.querySelectorAll('.nav a').forEach((a) => a.classList.toggle('active', a.dataset.page === state.page));
-    $('#pageTitle').textContent = NAV.find((n) => n[0] === state.page)[1];
+    const nav = NAV.find((n) => n[0] === state.page);
+    $('#pageTitle').textContent = nav[1]; $('#pageSub').textContent = nav[3] || '';
+    document.title = `${nav[1]} · Footfall`;
     // Superadmin-д огноо/байршлын шүүлтүүр хэрэггүй (байгууллагын өгөгдөл харахгүй)
     $('#globalFilters').style.display = (state.page === 'settings' || state.user.role === 'superadmin') ? 'none' : '';
     killCharts();
-    $('#page').innerHTML = '<div class="empty">Ачаалж байна…</div>';
-    try { await PAGES[state.page](); } catch (e) { $('#page').innerHTML = `<div class="card err">Алдаа: ${esc(e.message)}</div>`; }
+    $('#page').innerHTML = skeleton();
+    try { await PAGES[state.page](); $('#page').classList.remove('page-enter'); void $('#page').offsetWidth; $('#page').classList.add('page-enter'); }
+    catch (e) { $('#page').innerHTML = `<div class="card err">Алдаа: ${esc(e.message)}</div>`; }
   }
 
   // ================= OVERVIEW =================
@@ -247,7 +305,7 @@
     const m = {}; rows.forEach((r) => { m[r.dow + '_' + r.hour] = r.in_count; });
     let h = '<div class="heat"><div></div>' + [...Array(24)].map((_, i) => `<div class="h">${i}</div>`).join('');
     for (let d = 1; d <= 7; d++) { h += `<div class="d">${DOW[d - 1]}</div>`; for (let i = 0; i < 24; i++) { const v = m[d + '_' + i] || 0; h += `<div class="c" title="${DOW[d - 1]} ${i}:00 — ${fmt(v)} хүн" style="opacity:${v ? (0.15 + 0.85 * v / max).toFixed(2) : 0.04}"></div>`; } }
-    $('#heat').innerHTML = h + '</div>';
+    $('#heat').innerHTML = h + '</div>' + `<div class="heat-legend"><span>бага</span><i></i><span>их (${fmt(max)} хүн/цаг)</span></div>`;
   }
 
   // ================= LOCATIONS =================
@@ -312,7 +370,7 @@ DUP:          ${location.origin}/api/camera/dup</div></div></div>`;
       <label>Байршил<select name="location_id" required>${locs.map((l) => `<option value="${l.id}">${esc(l.tenant_name)} / ${esc(l.name)}</option>`).join('')}</select></label>
       <div class="actions"><button type="button" class="btn" data-close>Болих</button><button class="btn primary">Нэмэх</button></div></form>`, (bg, close) => {
       bg.querySelector('[data-close]').onclick = close;
-      bg.querySelector('#f').onsubmit = async (e) => { e.preventDefault(); try { await api('/dash/devices/claim', { method: 'POST', body: Object.fromEntries(new FormData(e.target)) }); toast('Төхөөрөмж нэмэгдлээ'); close(); await loadMeta(); fillLocationSelects(); render(); } catch (err) { toast(err.message); } };
+      bg.querySelector('#f').onsubmit = async (e) => { e.preventDefault(); try { await api('/dash/devices/claim', { method: 'POST', body: Object.fromEntries(new FormData(e.target)) }); toast('Төхөөрөмж нэмэгдлээ'); close(); await loadMeta(); fillLocationSelects(); render(); } catch (err) { toast(err.message, 'error'); } };
     });
   }
   function deviceModal(d) {
@@ -331,14 +389,14 @@ DUP:          ${location.origin}/api/camera/dup</div></div></div>`;
         <div class="actions"><button type="button" class="btn" data-close>Болих</button><button class="btn primary">Хадгалах</button></div></form>`,
       (bg, close) => {
         bg.querySelector('[data-close]').onclick = close;
-        bg.querySelector('#f').onsubmit = async (e) => { e.preventDefault(); const f = Object.fromEntries(new FormData(e.target)); try { await api('/dash/devices/' + d.sn, { method: 'PUT', body: f }); toast('Хадгалагдлаа'); close(); await loadMeta(); fillLocationSelects(); render(); } catch (err) { toast(err.message); } };
+        bg.querySelector('#f').onsubmit = async (e) => { e.preventDefault(); const f = Object.fromEntries(new FormData(e.target)); try { await api('/dash/devices/' + d.sn, { method: 'PUT', body: f }); toast('Хадгалагдлаа'); close(); await loadMeta(); fillLocationSelects(); render(); } catch (err) { toast(err.message, 'error'); } };
       });
   }
   function resyncModal(sn) {
     modal(`<h2>Түүхэн өгөгдөл дахин татах</h2><p class="muted small">Төхөөрөмж сүүлийн 90 хоногийн өгөгдлийг өөр дээрээ хадгалдаг. Сонгосон хугацааны өгөгдлийг дараагийн heartbeat-д дахин илгээхийг хүснэ.</p>
       <form class="form" id="f"><div class="row"><label>Эхлэх<input type="date" name="from" required value="${ubDate(-7)}"></label><label>Дуусах<input type="date" name="to" required value="${ubDate(0)}"></label></div>
       <div class="actions"><button type="button" class="btn" data-close>Болих</button><button class="btn primary">Хүсэлт илгээх</button></div></form>`,
-      (bg, close) => { bg.querySelector('[data-close]').onclick = close; bg.querySelector('#f').onsubmit = async (e) => { e.preventDefault(); const f = Object.fromEntries(new FormData(e.target)); try { await api('/dash/devices/' + sn + '/resync', { method: 'POST', body: { from: f.from + 'T00:00:00+08:00', to: f.to + 'T23:59:59+08:00' } }); toast('Хүсэлт бүртгэгдлээ — дараагийн heartbeat-д илгээнэ'); close(); } catch (err) { toast(err.message); } }; });
+      (bg, close) => { bg.querySelector('[data-close]').onclick = close; bg.querySelector('#f').onsubmit = async (e) => { e.preventDefault(); const f = Object.fromEntries(new FormData(e.target)); try { await api('/dash/devices/' + sn + '/resync', { method: 'POST', body: { from: f.from + 'T00:00:00+08:00', to: f.to + 'T23:59:59+08:00' } }); toast('Хүсэлт бүртгэгдлээ — дараагийн heartbeat-д илгээнэ'); close(); } catch (err) { toast(err.message, 'error'); } }; });
   }
 
   // ================= DEMOGRAPHICS =================
@@ -430,7 +488,7 @@ DUP:          ${location.origin}/api/camera/dup</div></div></div>`;
     modal(`<h2>${preset.role === 'admin' ? 'Байгууллагын админ нэмэх' : 'Хэрэглэгч нэмэх'}</h2>${fixedTenant ? `<p class="muted small">Байгууллага: <b>${esc(preset.tenantName || '')}</b></p>` : ''}<form class="form" id="f"><label>Нэр<input name="name"></label><label>И-мэйл<input type="email" name="email" required autocomplete="off"></label><label>Нууц үг<input type="password" name="password" required minlength="6" autocomplete="new-password"></label>
       <label>Эрх<select name="role"><option value="viewer" ${preset.role === 'viewer' ? 'selected' : ''}>Үзэгч — зөвхөн харах</option><option value="admin" ${preset.role === 'admin' ? 'selected' : ''}>Админ — байршил, төхөөрөмж, хэрэглэгч, API түлхүүр удирдах</option>${isSuper && !fixedTenant ? '<option value="superadmin">Супер админ — бүх байгууллага</option>' : ''}</select></label>
       ${fixedTenant ? `<input type="hidden" name="tenant_id" value="${preset.tenantId}">` : tenantSelect('tenant_id', state.tenantId || (state.tenants[0] || {}).id)}
-      <div class="actions"><button type="button" class="btn" data-close>Болих</button><button class="btn primary">Нэмэх</button></div></form>`, (bg, close) => { bg.querySelector('[data-close]').onclick = close; bg.querySelector('#f').onsubmit = async (e) => { e.preventDefault(); try { const u = await api('/dash/users', { method: 'POST', body: Object.fromEntries(new FormData(e.target)) }); toast(`${u.email} нэмэгдлээ`); close(); after && after(); } catch (err) { toast(err.message); } }; });
+      <div class="actions"><button type="button" class="btn" data-close>Болих</button><button class="btn primary">Нэмэх</button></div></form>`, (bg, close) => { bg.querySelector('[data-close]').onclick = close; bg.querySelector('#f').onsubmit = async (e) => { e.preventDefault(); try { const u = await api('/dash/users', { method: 'POST', body: Object.fromEntries(new FormData(e.target)) }); toast(`${u.email} нэмэгдлээ`); close(); after && after(); } catch (err) { toast(err.message, 'error'); } }; });
   }
   const tenantSelect = (name, sel) => state.user.role === 'superadmin' ? `<label>Байгууллага<select name="${name}" required>${state.tenants.map((t) => `<option value="${t.id}" ${String(t.id) === String(sel) ? 'selected' : ''}>${esc(t.name)}</option>`).join('')}</select></label>` : '';
   const SETTINGS = {
@@ -445,10 +503,10 @@ DUP:          ${location.origin}/api/camera/dup</div></div></div>`;
         <div class="row"><label>Цагийн бүс<input name="timezone" value="${esc(l.timezone || 'Asia/Ulaanbaatar')}"></label><label>Нээх / Хаах<div style="display:flex;gap:6px"><input type="time" name="open_time" value="${(l.open_time || '09:00').slice(0, 5)}"><input type="time" name="close_time" value="${(l.close_time || '21:00').slice(0, 5)}"></div></label></div>
         <div class="actions"><button type="button" class="btn" data-close>Болих</button><button class="btn primary">Хадгалах</button></div></form>`, (bg, close) => {
         bg.querySelector('[data-close]').onclick = close;
-        bg.querySelector('#f').onsubmit = async (e) => { e.preventDefault(); const f = Object.fromEntries(new FormData(e.target)); try { await api(l.id ? '/dash/locations/' + l.id : '/dash/locations', { method: l.id ? 'PUT' : 'POST', body: f }); toast('Хадгалагдлаа'); close(); await loadMeta(); SETTINGS.locations(); } catch (err) { toast(err.message); } };
+        bg.querySelector('#f').onsubmit = async (e) => { e.preventDefault(); const f = Object.fromEntries(new FormData(e.target)); try { await api(l.id ? '/dash/locations/' + l.id : '/dash/locations', { method: l.id ? 'PUT' : 'POST', body: f }); toast('Хадгалагдлаа'); close(); await loadMeta(); SETTINGS.locations(); } catch (err) { toast(err.message, 'error'); } };
       });
       if ($('#add')) $('#add').onclick = () => form();
-      $('#tab').onclick = async (e) => { const ed = e.target.closest('[data-e]'); const del = e.target.closest('[data-d]'); if (ed) form(locs.find((l) => String(l.id) === ed.dataset.e)); if (del && confirm('Байршлыг устгах уу? Төхөөрөмжүүд оноогоогүй болно.')) { await api('/dash/locations/' + del.dataset.d, { method: 'DELETE' }); await loadMeta(); SETTINGS.locations(); } };
+      $('#tab').onclick = async (e) => { const ed = e.target.closest('[data-e]'); const del = e.target.closest('[data-d]'); if (ed) form(locs.find((l) => String(l.id) === ed.dataset.e)); if (del && await confirmDlg('Байршлыг устгах уу? Төхөөрөмжүүд оноогоогүй болно.')) { await api('/dash/locations/' + del.dataset.d, { method: 'DELETE' }); await loadMeta(); SETTINGS.locations(); } };
     },
     async tenants() {
       const ts = await api('/dash/tenants');
@@ -463,11 +521,11 @@ DUP:          ${location.origin}/api/camera/dup</div></div></div>`;
         <label>Админы и-мэйл<input type="email" name="admin_email" required autocomplete="off"></label>
         <label>Админы нууц үг<input type="password" name="admin_password" required minlength="6" autocomplete="new-password"></label>
         <p class="small muted">Админ энэ и-мэйл, нууц үгээр нэвтэрч орж өөрөө солино.</p>
-        <div class="actions"><button type="button" class="btn" data-close>Болих</button><button class="btn primary">Байгууллага + админ үүсгэх</button></div></form>`, (bg, close) => { bg.querySelector('[data-close]').onclick = close; bg.querySelector('#f').onsubmit = async (e) => { e.preventDefault(); try { const t = await api('/dash/tenants', { method: 'POST', body: Object.fromEntries(new FormData(e.target)) }); toast(`«${t.name}» үүслээ, админ: ${t.admin ? t.admin.email : '—'}`); close(); await loadMeta(); SETTINGS.tenants(); } catch (err) { toast(err.message); } }; });
+        <div class="actions"><button type="button" class="btn" data-close>Болих</button><button class="btn primary">Байгууллага + админ үүсгэх</button></div></form>`, (bg, close) => { bg.querySelector('[data-close]').onclick = close; bg.querySelector('#f').onsubmit = async (e) => { e.preventDefault(); try { const t = await api('/dash/tenants', { method: 'POST', body: Object.fromEntries(new FormData(e.target)) }); toast(`«${t.name}» үүслээ, админ: ${t.admin ? t.admin.email : '—'}`); close(); await loadMeta(); SETTINGS.tenants(); } catch (err) { toast(err.message, 'error'); } }; });
       $('#tab').onclick = async (e) => {
         const add = e.target.closest('[data-a]'); const del = e.target.closest('[data-d]');
         if (add) { const t = ts.find((x) => String(x.id) === add.dataset.a); userModal({ tenantId: t.id, tenantName: t.name, role: 'admin' }, () => SETTINGS.tenants()); }
-        if (del && confirm('Байгууллагыг бүх байршил, хэрэглэгч, API түлхүүрийн хамт устгах уу?')) { await api('/dash/tenants/' + del.dataset.d, { method: 'DELETE' }); await loadMeta(); SETTINGS.tenants(); }
+        if (del && await confirmDlg('Байгууллагыг бүх байршил, хэрэглэгч, API түлхүүрийн хамт устгах уу?')) { await api('/dash/tenants/' + del.dataset.d, { method: 'DELETE' }); await loadMeta(); SETTINGS.tenants(); }
       };
     },
     async users() {
@@ -476,7 +534,7 @@ DUP:          ${location.origin}/api/camera/dup</div></div></div>`;
       $('#tab').innerHTML = `<div class="card"><div class="head"><h2>Хэрэглэгч</h2><button class="btn primary" id="add">+ Хэрэглэгч нэмэх</button></div><div class="tbl-wrap"><table><thead><tr><th>Нэр</th><th>И-мэйл</th><th>Эрх</th><th>Байгууллага</th><th></th></tr></thead><tbody>
         ${us.map((u) => `<tr><td><b>${esc(u.name)}</b></td><td>${esc(u.email)}</td><td>${roleName(u.role)}</td><td>${esc(u.tenant_name || 'Бүгд')}</td><td>${u.id !== state.user.uid ? `<button class="btn sm danger" data-d="${u.id}">Устгах</button>` : '<span class="muted small">та</span>'}</td></tr>`).join('')}</tbody></table></div></div>`;
       $('#add').onclick = () => userModal({}, () => SETTINGS.users());
-      $('#tab').onclick = async (e) => { const del = e.target.closest('[data-d]'); if (del && confirm('Хэрэглэгчийг устгах уу?')) { await api('/dash/users/' + del.dataset.d, { method: 'DELETE' }); SETTINGS.users(); } };
+      $('#tab').onclick = async (e) => { const del = e.target.closest('[data-d]'); if (del && await confirmDlg('Хэрэглэгчийг устгах уу?')) { await api('/dash/users/' + del.dataset.d, { method: 'DELETE' }); SETTINGS.users(); } };
     },
     async apikeys() {
       const ks = await api('/dash/api-keys' + (state.tenantId ? '?tenant_id=' + state.tenantId : ''));
@@ -487,9 +545,9 @@ DUP:          ${location.origin}/api/camera/dup</div></div></div>`;
       $('#add').onclick = () => modal(`<h2>API түлхүүр үүсгэх</h2><form class="form" id="f"><label>Нэр (юунд ашиглах)<input name="name" required placeholder="ERP интеграц"></label>${tenantSelect('tenant_id', state.tenantId || (state.tenants[0] || {}).id)}<div class="actions"><button type="button" class="btn" data-close>Болих</button><button class="btn primary">Үүсгэх</button></div></form>`, (bg, close) => {
         bg.querySelector('[data-close]').onclick = close;
         bg.querySelector('#f').onsubmit = async (e) => { e.preventDefault(); try { const k = await api('/dash/api-keys', { method: 'POST', body: Object.fromEntries(new FormData(e.target)) }); close(); modal(`<h2>Түлхүүр үүслээ</h2><p class="small">Энэ түлхүүрийг <b>одоо хуулж</b> аюулгүй газар хадгална уу — дахин харагдахгүй.</p><div class="keybox"><input class="mono" readonly value="${esc(k.key)}" id="kv"><button class="btn" id="cp">Хуулах</button></div><div class="code" style="margin-top:12px">curl -H "X-API-Key: ${esc(k.key)}" \\
-  "${location.origin}/api/v1/flow/totals?from=${ubDate(-7)}&to=${ubDate(1)}"</div><div class="actions"><button class="btn primary" data-close>Хаах</button></div>`, (b2, c2) => { b2.querySelector('[data-close]').onclick = () => { c2(); SETTINGS.apikeys(); }; b2.querySelector('#cp').onclick = () => { navigator.clipboard.writeText(k.key); toast('Хуулагдлаа'); }; }); } catch (err) { toast(err.message); } };
+  "${location.origin}/api/v1/flow/totals?from=${ubDate(-7)}&to=${ubDate(1)}"</div><div class="actions"><button class="btn primary" data-close>Хаах</button></div>`, (b2, c2) => { b2.querySelector('[data-close]').onclick = () => { c2(); SETTINGS.apikeys(); }; b2.querySelector('#cp').onclick = () => { navigator.clipboard.writeText(k.key); toast('Хуулагдлаа'); }; }); } catch (err) { toast(err.message, 'error'); } };
       });
-      $('#tab').onclick = async (e) => { const del = e.target.closest('[data-d]'); if (del && confirm('Түлхүүрийг хүчингүй болгох уу? Үүнийг ашигладаг интеграц ажиллахаа болино.')) { await api('/dash/api-keys/' + del.dataset.d, { method: 'DELETE' }); SETTINGS.apikeys(); } };
+      $('#tab').onclick = async (e) => { const del = e.target.closest('[data-d]'); if (del && await confirmDlg('Түлхүүрийг хүчингүй болгох уу? Үүнийг ашигладаг интеграц ажиллахаа болино.')) { await api('/dash/api-keys/' + del.dataset.d, { method: 'DELETE' }); SETTINGS.apikeys(); } };
     },
     async apidocs() {
       const O = location.origin;
@@ -533,7 +591,7 @@ POST ${O}/api/camera/dup          — өдрийн DUP (realtime + final) тай
   };
 
   function passwordModal() {
-    modal(`<h2>Нууц үг солих</h2><form class="form" id="f"><label>Одоогийн нууц үг<input type="password" name="current" required></label><label>Шинэ нууц үг<input type="password" name="next" required minlength="6"></label><div class="actions"><button type="button" class="btn" data-close>Болих</button><button class="btn primary">Солих</button></div></form>`, (bg, close) => { bg.querySelector('[data-close]').onclick = close; bg.querySelector('#f').onsubmit = async (e) => { e.preventDefault(); try { await api('/dash/auth/password', { method: 'POST', body: Object.fromEntries(new FormData(e.target)) }); toast('Нууц үг солигдлоо'); close(); } catch (err) { toast(err.message); } }; });
+    modal(`<h2>Нууц үг солих</h2><form class="form" id="f"><label>Одоогийн нууц үг<input type="password" name="current" required></label><label>Шинэ нууц үг<input type="password" name="next" required minlength="6"></label><div class="actions"><button type="button" class="btn" data-close>Болих</button><button class="btn primary">Солих</button></div></form>`, (bg, close) => { bg.querySelector('[data-close]').onclick = close; bg.querySelector('#f').onsubmit = async (e) => { e.preventDefault(); try { await api('/dash/auth/password', { method: 'POST', body: Object.fromEntries(new FormData(e.target)) }); toast('Нууц үг солигдлоо'); close(); } catch (err) { toast(err.message, 'error'); } }; });
   }
 
   // ================= SUPERADMIN: БАЙГУУЛЛАГУУД =================
