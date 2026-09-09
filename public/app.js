@@ -411,6 +411,15 @@ DUP:          ${location.origin}/api/camera/dup</div></div></div>`;
     $('.tabs').onclick = (e) => { const b = e.target.closest('[data-tab]'); if (b) location.hash = '#settings/' + b.dataset.tab; };
     await SETTINGS[tab]();
   }
+  // Хэрэглэгч нэмэх modal. preset: { tenantId, tenantName, role } — байгууллагын мөрөөс «+ Админ» дарахад tenant/эрх урьдчилан тогтоно
+  function userModal(preset = {}, after) {
+    const isSuper = state.user.role === 'superadmin';
+    const fixedTenant = preset.tenantId != null;
+    modal(`<h2>${preset.role === 'admin' ? 'Байгууллагын админ нэмэх' : 'Хэрэглэгч нэмэх'}</h2>${fixedTenant ? `<p class="muted small">Байгууллага: <b>${esc(preset.tenantName || '')}</b></p>` : ''}<form class="form" id="f"><label>Нэр<input name="name"></label><label>И-мэйл<input type="email" name="email" required autocomplete="off"></label><label>Нууц үг<input type="password" name="password" required minlength="6" autocomplete="new-password"></label>
+      <label>Эрх<select name="role"><option value="viewer" ${preset.role === 'viewer' ? 'selected' : ''}>Үзэгч — зөвхөн харах</option><option value="admin" ${preset.role === 'admin' ? 'selected' : ''}>Админ — байршил, төхөөрөмж, хэрэглэгч, API түлхүүр удирдах</option>${isSuper && !fixedTenant ? '<option value="superadmin">Супер админ — бүх байгууллага</option>' : ''}</select></label>
+      ${fixedTenant ? `<input type="hidden" name="tenant_id" value="${preset.tenantId}">` : tenantSelect('tenant_id', state.tenantId || (state.tenants[0] || {}).id)}
+      <div class="actions"><button type="button" class="btn" data-close>Болих</button><button class="btn primary">Нэмэх</button></div></form>`, (bg, close) => { bg.querySelector('[data-close]').onclick = close; bg.querySelector('#f').onsubmit = async (e) => { e.preventDefault(); try { const u = await api('/dash/users', { method: 'POST', body: Object.fromEntries(new FormData(e.target)) }); toast(`${u.email} нэмэгдлээ`); close(); after && after(); } catch (err) { toast(err.message); } }; });
+  }
   const tenantSelect = (name, sel) => state.user.role === 'superadmin' ? `<label>Байгууллага<select name="${name}" required>${state.tenants.map((t) => `<option value="${t.id}" ${String(t.id) === String(sel) ? 'selected' : ''}>${esc(t.name)}</option>`).join('')}</select></label>` : '';
   const SETTINGS = {
     async locations() {
@@ -431,20 +440,30 @@ DUP:          ${location.origin}/api/camera/dup</div></div></div>`;
     },
     async tenants() {
       const ts = await api('/dash/tenants');
-      $('#tab').innerHTML = `<div class="card"><div class="head"><h2>Байгууллага (tenant)</h2><button class="btn primary" id="add">+ Байгууллага нэмэх</button></div><div class="tbl-wrap"><table><thead><tr><th>Нэр</th><th>Slug</th><th class="num">Байршил</th><th class="num">Төхөөрөмж</th><th class="num">Хэрэглэгч</th><th>Үүссэн</th><th></th></tr></thead><tbody>
-        ${ts.map((t) => `<tr><td><b>${esc(t.name)}</b></td><td class="mono">${esc(t.slug)}</td><td class="num">${t.location_count}</td><td class="num">${t.device_count}</td><td class="num">${t.user_count}</td><td class="small muted">${fmtDT(t.created_at)}</td><td><button class="btn sm danger" data-d="${t.id}">Устгах</button></td></tr>`).join('') || '<tr><td colspan="7" class="empty">Байгууллага байхгүй</td></tr>'}</tbody></table></div></div>`;
-      $('#add').onclick = () => modal(`<h2>Байгууллага нэмэх</h2><form class="form" id="f"><label>Нэр<input name="name" required></label><label>Slug (латин, сонголтот)<input name="slug" placeholder="nomin"></label><div class="actions"><button type="button" class="btn" data-close>Болих</button><button class="btn primary">Нэмэх</button></div></form>`, (bg, close) => { bg.querySelector('[data-close]').onclick = close; bg.querySelector('#f').onsubmit = async (e) => { e.preventDefault(); try { await api('/dash/tenants', { method: 'POST', body: Object.fromEntries(new FormData(e.target)) }); close(); await loadMeta(); SETTINGS.tenants(); } catch (err) { toast(err.message); } }; });
-      $('#tab').onclick = async (e) => { const del = e.target.closest('[data-d]'); if (del && confirm('Байгууллагыг бүх байршил, хэрэглэгч, API түлхүүрийн хамт устгах уу?')) { await api('/dash/tenants/' + del.dataset.d, { method: 'DELETE' }); await loadMeta(); SETTINGS.tenants(); } };
+      $('#tab').innerHTML = `<div class="card"><div class="head"><h2>Байгууллага (tenant)</h2><button class="btn primary" id="add">+ Байгууллага нэмэх</button></div>
+        <p class="muted small">Байгууллага үүсгэхдээ түүний админыг хамт үүсгэнэ. Админ өөрийн байгууллагынхаа байршил, төхөөрөмж, хэрэглэгч, API түлхүүрийг удирдана.</p>
+        <div class="tbl-wrap"><table><thead><tr><th>Нэр</th><th>Slug</th><th>Админ</th><th class="num">Байршил</th><th class="num">Төхөөрөмж</th><th class="num">Хэрэглэгч</th><th>Үүссэн</th><th></th></tr></thead><tbody>
+        ${ts.map((t) => `<tr><td><b>${esc(t.name)}</b></td><td class="mono">${esc(t.slug)}</td><td class="small">${t.admin_emails ? esc(t.admin_emails) : '<span class="pill warn">Админгүй</span>'}</td><td class="num">${t.location_count}</td><td class="num">${t.device_count}</td><td class="num">${t.user_count}</td><td class="small muted">${fmtDT(t.created_at)}</td><td style="white-space:nowrap"><button class="btn sm" data-a="${t.id}">+ Админ</button> <button class="btn sm danger" data-d="${t.id}">Устгах</button></td></tr>`).join('') || '<tr><td colspan="8" class="empty">Байгууллага байхгүй</td></tr>'}</tbody></table></div></div>`;
+      $('#add').onclick = () => modal(`<h2>Байгууллага нэмэх</h2><form class="form" id="f">
+        <label>Байгууллагын нэр<input name="name" required placeholder="Номин Холдинг"></label><label>Slug (латин, сонголтот)<input name="slug" placeholder="nomin"></label>
+        <h3 style="margin-top:6px">Байгууллагын админ</h3>
+        <label>Админы нэр<input name="admin_name" placeholder="Б. Батаа"></label>
+        <label>Админы и-мэйл<input type="email" name="admin_email" required autocomplete="off"></label>
+        <label>Админы нууц үг<input type="password" name="admin_password" required minlength="6" autocomplete="new-password"></label>
+        <p class="small muted">Админ энэ и-мэйл, нууц үгээр нэвтэрч орж өөрөө солино.</p>
+        <div class="actions"><button type="button" class="btn" data-close>Болих</button><button class="btn primary">Байгууллага + админ үүсгэх</button></div></form>`, (bg, close) => { bg.querySelector('[data-close]').onclick = close; bg.querySelector('#f').onsubmit = async (e) => { e.preventDefault(); try { const t = await api('/dash/tenants', { method: 'POST', body: Object.fromEntries(new FormData(e.target)) }); toast(`«${t.name}» үүслээ, админ: ${t.admin ? t.admin.email : '—'}`); close(); await loadMeta(); SETTINGS.tenants(); } catch (err) { toast(err.message); } }; });
+      $('#tab').onclick = async (e) => {
+        const add = e.target.closest('[data-a]'); const del = e.target.closest('[data-d]');
+        if (add) { const t = ts.find((x) => String(x.id) === add.dataset.a); userModal({ tenantId: t.id, tenantName: t.name, role: 'admin' }, () => SETTINGS.tenants()); }
+        if (del && confirm('Байгууллагыг бүх байршил, хэрэглэгч, API түлхүүрийн хамт устгах уу?')) { await api('/dash/tenants/' + del.dataset.d, { method: 'DELETE' }); await loadMeta(); SETTINGS.tenants(); }
+      };
     },
     async users() {
       const us = await api('/dash/users' + (state.tenantId ? '?tenant_id=' + state.tenantId : ''));
       const isSuper = state.user.role === 'superadmin';
       $('#tab').innerHTML = `<div class="card"><div class="head"><h2>Хэрэглэгч</h2><button class="btn primary" id="add">+ Хэрэглэгч нэмэх</button></div><div class="tbl-wrap"><table><thead><tr><th>Нэр</th><th>И-мэйл</th><th>Эрх</th><th>Байгууллага</th><th></th></tr></thead><tbody>
         ${us.map((u) => `<tr><td><b>${esc(u.name)}</b></td><td>${esc(u.email)}</td><td>${roleName(u.role)}</td><td>${esc(u.tenant_name || 'Бүгд')}</td><td>${u.id !== state.user.uid ? `<button class="btn sm danger" data-d="${u.id}">Устгах</button>` : '<span class="muted small">та</span>'}</td></tr>`).join('')}</tbody></table></div></div>`;
-      $('#add').onclick = () => modal(`<h2>Хэрэглэгч нэмэх</h2><form class="form" id="f"><label>Нэр<input name="name"></label><label>И-мэйл<input type="email" name="email" required></label><label>Нууц үг<input type="password" name="password" required minlength="6"></label>
-        <label>Эрх<select name="role"><option value="viewer">Үзэгч — зөвхөн харах</option><option value="admin">Админ — байршил, төхөөрөмж, хэрэглэгч, API түлхүүр удирдах</option>${isSuper ? '<option value="superadmin">Супер админ — бүх байгууллага</option>' : ''}</select></label>
-        ${tenantSelect('tenant_id', state.tenantId || (state.tenants[0] || {}).id)}
-        <div class="actions"><button type="button" class="btn" data-close>Болих</button><button class="btn primary">Нэмэх</button></div></form>`, (bg, close) => { bg.querySelector('[data-close]').onclick = close; bg.querySelector('#f').onsubmit = async (e) => { e.preventDefault(); try { await api('/dash/users', { method: 'POST', body: Object.fromEntries(new FormData(e.target)) }); close(); SETTINGS.users(); } catch (err) { toast(err.message); } }; });
+      $('#add').onclick = () => userModal({}, () => SETTINGS.users());
       $('#tab').onclick = async (e) => { const del = e.target.closest('[data-d]'); if (del && confirm('Хэрэглэгчийг устгах уу?')) { await api('/dash/users/' + del.dataset.d, { method: 'DELETE' }); SETTINGS.users(); } };
     },
     async apikeys() {

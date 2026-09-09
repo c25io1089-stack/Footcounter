@@ -1,6 +1,6 @@
 // Dashboard-ийн дотоод API (cookie нэвтрэлт)
 const express = require('express');
-const { query } = require('../lib/db');
+const { query, pool } = require('../lib/db');
 const auth = require('../lib/auth');
 const stats = require('../lib/stats');
 
@@ -85,19 +85,54 @@ router.get('/ingest-log', auth.requireRole('superadmin', 'admin'), wrap(async (r
   res.json(r.rows);
 }));
 
+// Кирилл нэрийг латин slug болгоно («Номин Холдинг» → nomin-holding)
+const CYR = { а: 'a', б: 'b', в: 'v', г: 'g', д: 'd', е: 'e', ё: 'yo', ж: 'j', з: 'z', и: 'i', й: 'i', к: 'k', л: 'l', м: 'm', н: 'n', о: 'o', ө: 'u', п: 'p', р: 'r', с: 's', т: 't', у: 'u', ү: 'u', ф: 'f', х: 'h', ц: 'ts', ч: 'ch', ш: 'sh', щ: 'sh', ъ: '', ы: 'y', ь: '', э: 'e', ю: 'yu', я: 'ya' };
+function slugify(v) {
+  return String(v || '').toLowerCase().split('').map((c) => (c in CYR ? CYR[c] : c)).join('')
+    .replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+}
+
 // ---- Tenant (зөвхөн superadmin) ----
 router.get('/tenants', auth.requireRole('superadmin'), wrap(async (req, res) => {
   const r = await query(`SELECT t.*, (SELECT count(*) FROM locations l WHERE l.tenant_id=t.id) AS location_count,
     (SELECT count(*) FROM devices d WHERE d.tenant_id=t.id) AS device_count,
-    (SELECT count(*) FROM users u WHERE u.tenant_id=t.id) AS user_count FROM tenants t ORDER BY t.name`);
+    (SELECT count(*) FROM users u WHERE u.tenant_id=t.id) AS user_count,
+    (SELECT string_agg(u.email, ', ' ORDER BY u.email) FROM users u WHERE u.tenant_id=t.id AND u.role='admin') AS admin_emails
+    FROM tenants t ORDER BY t.name`);
   res.json(r.rows);
 }));
+// Байгууллага үүсгэх — admin_email/admin_password өгвөл байгууллагын админыг хамт нэг transaction-д үүсгэнэ
 router.post('/tenants', auth.requireRole('superadmin'), wrap(async (req, res) => {
-  const { name, slug } = req.body || {};
+  const { name, slug, admin_name, admin_email, admin_password } = req.body || {};
   if (!name) return res.status(400).json({ error: 'Нэр шаардлагатай' });
-  const s = (slug || name).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'tenant-' + Date.now();
-  const r = await query('INSERT INTO tenants(name, slug) VALUES($1,$2) RETURNING *', [name, s]);
-  res.json(r.rows[0]);
+  const s = slugify(slug || name) || 'tenant-' + Date.now();
+  const withAdmin = !!(admin_email || admin_password);
+  if (withAdmin) {
+    if (!admin_email || !admin_password) return res.status(400).json({ error: 'Админы и-мэйл, нууц үг хоёулаа шаардлагатай' });
+    if (admin_password.length < 6) return res.status(400).json({ error: 'Админы нууц үг 6-аас дээш тэмдэгт' });
+    const dup = await query('SELECT 1 FROM users WHERE lower(email)=lower($1)', [admin_email]);
+    if (dup.rowCount) return res.status(409).json({ error: 'Энэ и-мэйлтэй хэрэглэгч аль хэдийн бүртгэлтэй' });
+  }
+  const slugDup = await query('SELECT 1 FROM tenants WHERE slug=$1', [s]);
+  if (slugDup.rowCount) return res.status(409).json({ error: `"${s}" slug-тай байгууллага байна — өөр slug оруулна уу` });
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const t = (await client.query('INSERT INTO tenants(name, slug) VALUES($1,$2) RETURNING *', [name, s])).rows[0];
+    let admin = null;
+    if (withAdmin) {
+      admin = (await client.query(
+        'INSERT INTO users(tenant_id, email, name, password_hash, role) VALUES($1,$2,$3,$4,$5) RETURNING id, email, name, role, tenant_id',
+        [t.id, admin_email.trim(), admin_name || '', await auth.bcrypt.hash(admin_password, 10), 'admin'])).rows[0];
+    }
+    await client.query('COMMIT');
+    res.json({ ...t, admin });
+  } catch (e) {
+    await client.query('ROLLBACK').catch(() => {});
+    throw e;
+  } finally {
+    client.release();
+  }
 }));
 router.put('/tenants/:id', auth.requireRole('superadmin'), wrap(async (req, res) => {
   const { name, slug } = req.body || {};
