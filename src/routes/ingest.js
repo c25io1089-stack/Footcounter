@@ -13,10 +13,15 @@ function toDate(v) {
 }
 const nowSec = () => Math.floor(Date.now() / 1000);
 
+function safeJson(body) {
+  const s = JSON.stringify(body);
+  return s.length > 200000 ? JSON.stringify({ truncated: true, length: s.length, head: s.slice(0, 2000) }) : s;
+}
+
 async function log(path, sn, status, message, body) {
   try {
     await query('INSERT INTO ingest_log(path, sn, status, message, body) VALUES($1,$2,$3,$4,$5)', [
-      path, sn || null, status, message || null, body ? JSON.stringify(body).slice(0, 200000) : null,
+      path, sn || null, status, message || null, body ? safeJson(body) : null,
     ]);
   } catch (e) { console.error('ingest_log', e.message); }
 }

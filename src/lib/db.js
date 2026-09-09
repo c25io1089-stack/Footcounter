@@ -2,6 +2,8 @@ const { Pool, types } = require('pg');
 // DATE → 'YYYY-MM-DD' мөр (JS Date-д хөрвүүлж цагийн бүсээр гажуулахгүй), int8 → Number
 types.setTypeParser(1082, (v) => v);
 types.setTypeParser(20, (v) => Number(v));
+// TIMESTAMP (цагийн бүсгүй, date_trunc … AT TIME ZONE-ийн үр дүн) → мөр хэвээр (серверийн локал цагаар гажуулахгүй)
+types.setTypeParser(1114, (v) => v);
 const fs = require('fs');
 const path = require('path');
 
@@ -13,10 +15,14 @@ if (!connectionString) {
 
 // Railway Postgres нь SSL шаарддаг; local-д хэрэггүй
 const needSsl = /railway|render|supabase|neon|amazonaws/i.test(connectionString) || process.env.PGSSL === '1';
+// Огноо-only ('2026-09-01') утгууд серверийн биш, дэлгүүрийн цагийн бүсээр тайлбарлагдана (Railway UTC дээр ч).
+// Startup параметрээр өгнө — холболт бүрд SET явуулах шаардлагагүй.
+const APP_TZ = process.env.APP_TZ || 'Asia/Ulaanbaatar';
 const pool = new Pool({
   connectionString,
   ssl: needSsl ? { rejectUnauthorized: false } : false,
   max: 10,
+  options: `-c TimeZone=${APP_TZ}`,
 });
 
 pool.on('error', (err) => console.error('PG pool алдаа', err));
@@ -49,4 +55,4 @@ async function migrate() {
   }
 }
 
-module.exports = { pool, query, migrate };
+module.exports = { pool, query, migrate, APP_TZ };

@@ -68,7 +68,15 @@ router.get('/reid', wrap(async (req, res) => res.json(await stats.reidSummary(fi
 router.get('/dedup', wrap(async (req, res) => res.json(await stats.dedupSummary(filters(req)))));
 router.get('/locations', wrap(async (req, res) => res.json(await stats.listLocations(auth.tenantScope(req)))));
 router.get('/devices', wrap(async (req, res) => res.json(await stats.listDevices(filters(req)))));
+// Төхөөрөмж хэрэглэгчийн хамрах хүрээнд байгаа эсэх (superadmin → бүгд; бусад → өөрийн tenant эсвэл оноогдоогүй)
+async function deviceInScope(req, sn) {
+  const d = (await query('SELECT sn, tenant_id FROM devices WHERE sn=$1', [sn])).rows[0];
+  if (!d) return null;
+  if (req.user.role === 'superadmin') return d;
+  return (!d.tenant_id || d.tenant_id === req.user.tid) ? d : null;
+}
 router.get('/devices/:sn/heartbeats', wrap(async (req, res) => {
+  if (!(await deviceInScope(req, req.params.sn))) return res.status(404).json({ error: 'Төхөөрөмж олдсонгүй' });
   const r = await query('SELECT ts, payload FROM heartbeats WHERE sn=$1 ORDER BY ts DESC LIMIT 50', [req.params.sn]);
   res.json(r.rows);
 }));
@@ -180,6 +188,7 @@ router.post('/devices/claim', auth.requireRole('superadmin', 'admin'), wrap(asyn
 router.post('/devices/:sn/resync', auth.requireRole('superadmin', 'admin'), wrap(async (req, res) => {
   const { from, to } = req.body || {};
   if (!from || !to) return res.status(400).json({ error: 'from/to шаардлагатай' });
+  if (!(await deviceInScope(req, req.params.sn))) return res.status(404).json({ error: 'Төхөөрөмж олдсонгүй' });
   await query('UPDATE devices SET resync_start=$2, resync_end=$3 WHERE sn=$1', [req.params.sn, from, to]);
   res.json({ ok: true, note: 'Дараагийн heartbeat-д төхөөрөмж рүү илгээнэ' });
 }));

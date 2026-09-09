@@ -22,6 +22,14 @@ app.use((req, res, next) => {
   next();
 });
 
+// Буруу JSON / хэт том body → HTML биш, протоколын маягийн JSON хариу
+app.use((err, req, res, next) => {
+  if (err && (err.type === 'entity.parse.failed' || err.type === 'entity.too.large')) {
+    return res.status(200).json({ code: 2, msg: 'invalid body: ' + err.type });
+  }
+  next(err);
+});
+
 app.get('/health', async (req, res) => {
   try { await query('SELECT 1'); res.json({ ok: true, time: new Date().toISOString() }); }
   catch (e) { res.status(500).json({ ok: false, error: e.message }); }

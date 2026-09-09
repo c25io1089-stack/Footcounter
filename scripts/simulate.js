@@ -49,7 +49,7 @@ async function main() {
     for (let d = 0; d < DAYS; d++) {
       const day = new Date(startDay); day.setDate(startDay.getDate() + d);
       const weekend = day.getDay() === 0 || day.getDay() === 6;
-      const dayStr = day.toISOString().slice(0, 10);
+      const dayStr = `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, '0')}-${String(day.getDate()).padStart(2, '0')}`; // локал огноо
       let dayIn = 0;
       const reidRecords = [];
       let gid = 1000;

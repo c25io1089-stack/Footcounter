@@ -34,6 +34,7 @@ HX-CCD21 ──HTTP POST──▶  Railway (Node.js/Express)  ──▶  Postgre
    | `ADMIN_EMAIL` | анхны супер админы и-мэйл |
    | `ADMIN_PASSWORD` | анхны нууц үг (нэвтэрсний дараа солино) |
    | `NODE_ENV` | `production` |
+   | `APP_TZ` | `Asia/Ulaanbaatar` (сонголтот — огноо-only `from/to` болон анхдагч `tz`; Railway UTC дээр ч дэлгүүрийн өдрөөр тооцно) |
 
 5. **Settings → Networking → Generate Domain** → `xxxx.up.railway.app` хаяг авна. Эхний deploy-д migration автоматаар хэрэгжиж, superadmin үүснэ.
 6. `https://xxxx.up.railway.app` руу орж нэвтэрнэ → Тохиргоо → Байгууллага, Байршил үүсгэнэ.
@@ -97,7 +98,8 @@ curl -H "X-API-Key: hx_XXXX" \
 cp .env.example .env            # DATABASE_URL-аа засна
 npm install
 npm start                       # http://localhost:3000  (admin@example.com / admin1234)
-npm run simulate                # 3 виртуал төхөөрөмж, 14 хоногийн өгөгдөл илгээнэ
+npm run simulate                # 3 виртуал төхөөрөмж, 14 хоногийн өгөгдөл илгээнэ (~3-4 мин)
+# node scripts/simulate.js http://127.0.0.1:3000 7      ← Windows дээр localhost-оос 127.0.0.1 хурдан
 # node scripts/simulate.js https://xxxx.up.railway.app 7 SN1,SN2   ← Railway руу тест өгөгдөл
 ```
 
@@ -126,3 +128,5 @@ scripts/simulate.js    Төхөөрөмжийн симулятор
 * "Одоо байгаа хүн": төхөөрөмж residence push (`currentStay`) илгээж байвал түүнийг, үгүй бол өнөөдрийн орсон − гарсан.
 * Ingest-ийн алдаа `ingest_log`-д 7 хоног, heartbeat 30 хоног хадгалагдаад автоматаар цэвэрлэгдэнэ.
 * Төхөөрөмж SN-ээр танигддаг тул ingest endpoint-үүд нэвтрэлтгүй; хүсвэл Railway дээр Cloudflare/IP allowlist нэмж болно.
+* Локал Postgres-ээ `UTF8` encoding-тэй үүсгэнэ (`CREATE DATABASE hxccd ENCODING 'UTF8' TEMPLATE template0`) — Windows-ийн анхдагч WIN1252 кирилл хадгалдаггүй.
+* Буруу JSON эсвэл 20MB-аас том body ирвэл сервер `{code:2}` JSON хариу өгнө (HTML алдаа биш) — төхөөрөмжийн лог уншихад амар.

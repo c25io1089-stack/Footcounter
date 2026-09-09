@@ -1,8 +1,8 @@
 // Dashboard болон гадаад API-д хамтдаа ашиглагдах статистик асуулгууд
-const { query } = require('./db');
+const { query, APP_TZ } = require('./db');
 
 const ONLINE_WINDOW_MIN = 3; // heartbeat минут тутам → 3 минут ирэхгүй бол offline
-const DEFAULT_TZ = 'Asia/Ulaanbaatar';
+const DEFAULT_TZ = APP_TZ;
 
 // Хамрах хүрээний нөхцөл: tenant / байршил / SN
 function scope(f, p) {
@@ -56,7 +56,8 @@ async function flowSeries(f) {
      FROM flow_records fr JOIN devices d ON d.sn=fr.sn
      WHERE fr.data_mode='Add' ${scope(f, p)} ${range(f, p, 'fr.ts')}
      GROUP BY 1 ORDER BY 1`, p);
-  return r.rows.map((x) => ({ ...x, bucket: x.bucket.toISOString ? x.bucket.toISOString().replace('Z', '') : x.bucket }));
+  // bucket: 'YYYY-MM-DD HH:MM:SS' (tz-ийн орон нутгийн цаг) → 'YYYY-MM-DDTHH:MM:SS'
+  return r.rows.map((x) => ({ ...x, bucket: String(x.bucket).replace(' ', 'T').slice(0, 19) }));
 }
 
 async function flowTotals(f) {
@@ -82,7 +83,9 @@ async function flowByLocation(f) {
      FROM locations l JOIN tenants t ON t.id=l.tenant_id
      LEFT JOIN devices d ON d.location_id=l.id
      LEFT JOIN flow_records fr ON fr.sn=d.sn AND fr.data_mode='Add' ${range(f, p, 'fr.ts')}
-     WHERE 1=1 ${f.tenantId ? (p.push(f.tenantId), `AND l.tenant_id=$${p.length}`) : ''}
+     WHERE 1=1 ${f.tenantId ? (p.push(f.tenantId), `AND l.tenant_id=${p.length}`) : ''}
+       ${f.locationId ? (p.push(f.locationId), `AND l.id=${p.length}`) : ''}
+       ${f.sn ? (p.push(f.sn), `AND EXISTS (SELECT 1 FROM devices x WHERE x.location_id=l.id AND x.sn=${p.length})`) : ''}
      GROUP BY l.id, l.name, t.name ORDER BY in_count DESC`, p);
   return r.rows;
 }
