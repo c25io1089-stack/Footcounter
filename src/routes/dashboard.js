@@ -1,6 +1,7 @@
 // Dashboard-ийн дотоод API (cookie нэвтрэлт)
 const express = require('express');
-const { query, pool } = require('../lib/db');
+const db = require('../lib/db');
+const { query } = db;
 const auth = require('../lib/auth');
 const stats = require('../lib/stats');
 
@@ -152,7 +153,7 @@ router.post('/tenants', auth.requireRole('superadmin'), wrap(async (req, res) =>
   }
   const slugDup = await query('SELECT 1 FROM tenants WHERE slug=$1', [s]);
   if (slugDup.rowCount) return res.status(409).json({ error: `"${s}" slug-тай байгууллага байна — өөр slug оруулна уу` });
-  const client = await pool.connect();
+  const client = await db.pool.connect();
   try {
     await client.query('BEGIN');
     const t = (await client.query('INSERT INTO tenants(name, slug) VALUES($1,$2) RETURNING *', [name, s])).rows[0];

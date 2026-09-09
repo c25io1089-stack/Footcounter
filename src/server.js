@@ -4,7 +4,7 @@ const path = require('path');
 const helmet = require('helmet');
 const compression = require('compression');
 const cookieParser = require('cookie-parser');
-const { migrate, query } = require('./lib/db');
+const { init, migrate, query, describe, APP_TZ } = require('./lib/db');
 const auth = require('./lib/auth');
 
 const app = express();
@@ -67,10 +67,15 @@ async function housekeeping() {
 }
 
 const PORT = process.env.PORT || 3000;
+process.on('unhandledRejection', (e) => console.error('unhandledRejection', e));
+process.on('uncaughtException', (e) => { console.error('uncaughtException', e); process.exit(1); });
+
 (async () => {
+  console.log(`Footfall эхэлж байна · node ${process.version} · PORT ${PORT} · NODE_ENV ${process.env.NODE_ENV || '-'} · APP_TZ ${APP_TZ} · DB ${describe()}`);
+  await init();       // Postgres холболт (SSL авто-тодорхойлолт, дахин оролдлого)
   await migrate();
   await seedAdmin();
   await housekeeping();
   setInterval(housekeeping, 6 * 3600 * 1000);
-  app.listen(PORT, () => console.log(`HX-CCD21 dashboard: http://localhost:${PORT}`));
-})().catch((e) => { console.error('Эхлүүлэх алдаа', e); process.exit(1); });
+  app.listen(PORT, '0.0.0.0', () => console.log(`Footfall dashboard: http://localhost:${PORT}`));
+})().catch((e) => { console.error('Эхлүүлэх алдаа:', e && e.message ? e.message : e); process.exit(1); });

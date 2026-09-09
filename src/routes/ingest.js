@@ -1,6 +1,7 @@
 // Төхөөрөмжөөс ирэх HTTP POST хүсэлтүүд (HX-CCD21 Data Protocol V2.5)
 const express = require('express');
-const { query, pool } = require('../lib/db');
+const db = require('../lib/db');
+const { query } = db;
 
 const router = express.Router();
 
@@ -85,7 +86,7 @@ async function dataUpload(req, res) {
   const b = req.body || {};
   const sn = b.sn;
   if (!sn) { await log(req.path, null, 1, 'sn байхгүй', b); return res.json({ code: 1, msg: 'sn does not exist' }); }
-  const client = await pool.connect();
+  const client = await db.pool.connect();
   try {
     await ensureDevice(sn, b);
     await client.query('BEGIN');
@@ -148,7 +149,7 @@ async function reid(req, res) {
   const b = req.body || {};
   const sn = b.master_sn;
   if (!sn || !b.date) { await log(req.path, sn, 1, 'master_sn/date байхгүй', b); return res.json({ code: 1, msg: 'sn does not exist' }); }
-  const client = await pool.connect();
+  const client = await db.pool.connect();
   try {
     await ensureDevice(sn);
     for (const s of b.device_sns || []) if (s !== sn) await ensureDevice(s);
