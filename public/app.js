@@ -85,7 +85,17 @@
     document.addEventListener('keydown', onKey);
     document.body.appendChild(bg);
     const first = bg.querySelector('input:not([type=hidden]), select, button:not(.x)'); if (first) setTimeout(() => first.focus(), 30);
+    // Гарын focus trap: Tab/Shift+Tab modal дотор эргэлдэнэ
+    bg.addEventListener('keydown', (e) => {
+      if (e.key !== 'Tab') return;
+      const f = [...bg.querySelectorAll('a[href], button:not([disabled]), input:not([disabled]):not([type=hidden]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])')];
+      if (!f.length) return; const a = f[0], z = f[f.length - 1];
+      if (e.shiftKey && document.activeElement === a) { e.preventDefault(); z.focus(); } else if (!e.shiftKey && document.activeElement === z) { e.preventDefault(); a.focus(); }
+    });
     onMount && onMount(bg, close);
+    // Формын submit товч: хариу иртэл loading + давхар илгээхээс сэргийлнэ
+    const form = bg.querySelector('form');
+    if (form && form.onsubmit) { const h = form.onsubmit; form.onsubmit = (e) => withLoading(form.querySelector('button[type=submit], button.primary'), () => h.call(form, e)); }
     return bg;
   }
   // Баталгаажуулах диалог (native confirm-ийн оронд) → Promise<boolean>
@@ -230,7 +240,7 @@
           <div class="fld range"><span>Хугацаа</span><div class="filters"><div class="seg" id="fRange">${[['today', 'Өнөөдөр'], ['7d', '7 хоног'], ['30d', '30 хоног'], ['90d', '90 хоног'], ['custom', 'Сонгох']].map(([k, t]) => `<button data-r="${k}" class="${state.range === k ? 'active' : ''}">${t}</button>`).join('')}</div>
             <span id="customRange" class="filters" ${state.range === 'custom' ? '' : 'hidden'}><input type="date" id="fFrom" value="${state.from}"> – <input type="date" id="fTo" value="${state.to}"></span></div></div>
           <div class="grow"></div>
-          <button class="btn icon" id="refreshBtn" title="Шинэчлэх" aria-label="Шинэчлэх"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.6-6.4M21 3v6h-6"/></svg></button>
+          <div class="fld upd"><span id="lastUpd" class="muted small"></span><button class="btn" id="refreshBtn" aria-label="Өгөгдөл шинэчлэх"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.6-6.4M21 3v6h-6"/></svg> Шинэчлэх</button></div>
         </div>
         <div class="content"><div id="page"></div></div>
       </main></div>`;
@@ -279,16 +289,39 @@
     const home = NAV[0][0]; // superadmin → 'admin', бусад → 'overview'
     const page = (location.hash || '#' + home).slice(1).split('/')[0];
     state.page = NAV.some((n) => n[0] === page) ? page : home;
-    document.querySelectorAll('.nav a').forEach((a) => a.classList.toggle('active', a.dataset.page === state.page));
+    document.querySelectorAll('.nav a').forEach((a) => { const on = a.dataset.page === state.page; a.classList.toggle('active', on); if (on) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current'); });
     const nav = NAV.find((n) => n[0] === state.page);
-    $('#pageTitle').textContent = nav[1]; $('#pageSub').textContent = nav[3] || '';
+    $('#pageTitle').textContent = nav[1];
     document.title = `${nav[1]} · Footfall`;
     // Superadmin-д огноо/байршлын шүүлтүүр хэрэггүй (байгууллагын өгөгдөл харахгүй)
-    $('#globalFilters').style.display = (state.page === 'settings' || state.user.role === 'superadmin') ? 'none' : '';
+    const dataPage = state.page !== 'settings' && state.user.role !== 'superadmin';
+    $('#globalFilters').style.display = dataPage ? '' : 'none';
+    // Дэд гарчиг = одоогийн контекст (аль байршил/төхөөрөмж, ямар хугацаа) — хэрэглэгч санахгүй, харна
+    $('#pageSub').textContent = dataPage && state.page !== 'devices' ? contextLabel() : (nav[3] || '');
     killCharts();
     $('#page').innerHTML = skeleton();
-    try { await PAGES[state.page](); $('#page').classList.remove('page-enter'); void $('#page').offsetWidth; $('#page').classList.add('page-enter'); }
-    catch (e) { $('#page').innerHTML = `<div class="card err">Алдаа: ${esc(e.message)}</div>`; }
+    const rb = $('#refreshBtn'); if (rb) rb.classList.add('loading');
+    try {
+      await PAGES[state.page]();
+      $('#page').classList.remove('page-enter'); void $('#page').offsetWidth; $('#page').classList.add('page-enter');
+      const lu = $('#lastUpd'); if (lu) lu.textContent = 'Шинэчилсэн ' + new Date().toLocaleTimeString('mn-MN', { hour: '2-digit', minute: '2-digit', hour12: false });
+    } catch (e) {
+      $('#page').innerHTML = `<div class="card empty-state"><div class="ico">${icon('alert')}</div><b>Өгөгдөл ачаалж чадсангүй</b><p>${esc(e.message)}</p><div style="margin-top:14px"><button class="btn primary" id="retryBtn">Дахин оролдох</button></div></div>`;
+      $('#retryBtn').onclick = () => render();
+    } finally { if (rb) rb.classList.remove('loading'); }
+  }
+  // «Эмарт Хан-Уул · Гол хаалга · 03.09–09.09 (7 хоног)»
+  function contextLabel() {
+    const parts = [];
+    const loc = state.locations.find((l) => String(l.id) === String(state.locationId));
+    const dev = state.devices.find((d) => d.sn === state.sn);
+    parts.push(loc ? loc.name : 'Бүх байршил');
+    if (dev) parts.push(dev.name || dev.sn);
+    const { from, to, days } = rangeDates();
+    const f = from.slice(0, 10), t = new Date(new Date(to.slice(0, 10)).getTime() - 86400000).toISOString().slice(0, 10);
+    const dm = (s) => s.slice(8, 10) + '.' + s.slice(5, 7);
+    parts.push(state.range === 'today' ? 'Өнөөдөр (' + dm(f) + ')' : `${dm(f)}–${dm(t)} (${days} хоног)`);
+    return parts.join(' · ');
   }
 
   // ================= OVERVIEW =================
@@ -308,16 +341,20 @@
       const m = {}; ov.series.forEach((s) => { m[s.bucket.slice(0, 13)] = s; });
       ov.series = [...Array(24)].map((_, h) => m[`${day}T${String(h).padStart(2, '0')}`] || { bucket: `${day}T${String(h).padStart(2, '0')}:00:00`, in_count: 0, out_count: 0, passby: 0, turnback: 0 });
     }
+    // Анхны хэрэглэгч: төхөөрөмж холбогдоогүй бол тоо биш, дараагийн алхмыг харуул
+    if (!ov.by_device.length && !state.locationId && !state.sn) { renderOnboarding(); return; }
+    const total = ov.by_device.length, offline = total - online;
+    const prevRate = prev.in_count + prev.passby ? prev.in_count / (prev.in_count + prev.passby) : 0;
+    const curRate = t.in_count + t.passby ? t.in_count / (t.in_count + t.passby) : 0;
     $('#page').innerHTML = `
-      <div class="grid g-kpi">
-        ${kpi({ label: 'Орсон', value: fmt(t.in_count), delta: { cur: t.in_count, prev: prev.in_count }, ico: 'in', c: 1, accent: true, spark: ov.series.map((s) => s.in_count) })}
-        ${kpi({ label: 'Гарсан', value: fmt(t.out_count), delta: { cur: t.out_count, prev: prev.out_count }, ico: 'out', c: 2, spark: ov.series.map((s) => s.out_count) })}
-        ${kpi({ label: 'Одоо байгаа хүн', value: fmt(ov.occupancy.total), sub: 'бодит цагт', ico: 'people', c: 3 })}
-        ${kpi({ label: 'Өнгөрсөн (орохгүй)', value: fmt(t.passby), sub: 'орох хувь ' + pct(t.in_count, t.in_count + t.passby), ico: 'pass', c: 4, spark: ov.series.map((s) => s.passby) })}
-        ${kpi({ label: 'Буцсан', value: fmt(t.turnback), delta: { cur: t.turnback, prev: prev.turnback }, ico: 'back', c: 5, spark: ov.series.map((s) => s.turnback) })}
+      ${offline ? `<div class="notice warn"><b>${offline} төхөөрөмж offline</b> — тоо дутуу байж болзошгүй. <a href="#devices">Төхөөрөмж хуудсанд шалгах →</a></div>` : ''}
+      <div class="grid g-kpi hero">
+        ${kpi({ label: 'Орсон зочин', value: fmt(t.in_count), delta: { cur: t.in_count, prev: prev.in_count }, ico: 'in', c: 1, accent: true, spark: ov.series.map((s) => s.in_count) })}
+        ${kpi({ label: 'Одоо дотор байгаа', value: fmt(ov.occupancy.total), sub: 'бодит цагт', ico: 'people', c: 3 })}
+        ${kpi({ label: 'Орох хувь', value: pct(t.in_count, t.in_count + t.passby), delta: { cur: curRate, prev: prevRate }, ico: 'pass', c: 4, spark: ov.series.map((s) => (s.in_count + s.passby ? Math.round(100 * s.in_count / (s.in_count + s.passby)) : 0)) })}
         ${kpi({ label: 'Дундаж байх хугацаа', value: dur(t.avg_stay_ms), sub: 'камерын талбайд', ico: 'clock', c: 7 })}
-        ${kpi({ label: 'Төхөөрөмж', value: `${online}<span class="muted" style="font-size:16px;font-weight:500">/${ov.by_device.length}</span>`, sub: online < ov.by_device.length ? ov.by_device.length - online + ' offline' : 'бүгд online', subClass: online < ov.by_device.length ? 'down' : 'up', ico: 'device', c: online < ov.by_device.length ? 8 : 3 })}
       </div>
+      <div class="stats"><span><b>${fmt(t.out_count)}</b> гарсан</span><span><b>${fmt(t.passby)}</b> өнгөрсөн (орохгүй)</span><span><b>${fmt(t.turnback)}</b> буцсан</span><span><b>${online}/${total}</b> төхөөрөмж online</span></div>
       <div class="grid g-2 section">
         <div class="card"><div class="head"><h2>Хүний урсгал</h2><span class="sub">${g === 'hour' ? 'цагаар' : g === 'day' ? 'өдрөөр' : '7 хоногоор'}</span></div><div class="chart-wrap"><canvas id="cFlow"></canvas></div></div>
         <div class="card"><div class="head"><h2>Байршлаар</h2><span class="sub">орсон хүн</span></div><div class="tbl-wrap"><table><thead><tr><th>Байршил</th><th class="num">Орсон</th><th class="num">Гарсан</th><th>Хувь</th></tr></thead><tbody>
@@ -343,6 +380,19 @@
     drawSparks();
   }
   const shift = (iso, days) => new Date(new Date(iso).getTime() + days * 86400000).toISOString();
+  // Анхны тохиргооны алхмууд (төхөөрөмжгүй байгууллага)
+  function renderOnboarding() {
+    const isAdmin = ['superadmin', 'admin'].includes(state.user.role);
+    const hasLoc = state.locations.length > 0;
+    const step = (n, done, title, body, cta) => `<div class="step ${done ? 'done' : ''}"><div class="n">${done ? '✓' : n}</div><div><b>${title}</b><p>${body}</p>${cta && !done ? cta : ''}</div></div>`;
+    $('#page').innerHTML = `<div class="card onboard">
+      <h2>Footfall-д тавтай морил 👋</h2><p class="muted">Тоо гарч эхлэхийн тулд 2 алхам үлдлээ. Төхөөрөмж эхний heartbeat илгээмэгц энэ дэлгэц өөрөө өгөгдөлтэй болно.</p>
+      <div class="steps">
+        ${step(1, hasLoc, 'Байршил үүсгэх', hasLoc ? `${state.locations.length} байршил бүртгэлтэй.` : 'Дэлгүүр/салбар бүр нэг байршил. Төхөөрөмжийг байршилд оноож өгнө.', isAdmin ? '<a class="btn primary sm" href="#settings/locations">Байршил нэмэх</a>' : '')}
+        ${step(2, false, 'HX-CCD21 төхөөрөмжийг холбох', `Төхөөрөмжийн удирдлагын хуудас → Settings → Data Push → HTTP: <b>${location.protocol === 'https:' ? 'HTTPS' : 'HTTP'}</b> · Сервер <b>${location.hostname}</b> · Порт <b>${location.port || (location.protocol === 'https:' ? 443 : 80)}</b>. Замууд анхдагчаараа зөв (<span class="mono">/api/camera/heartBeat</span> …).`, '<a class="btn sm" href="#devices">Дэлгэрэнгүй заавар</a>')}
+        ${step(3, false, 'Төхөөрөмжид нэр, байршил оноох', 'Эхний heartbeat ирмэгц Төхөөрөмж хуудсанд «Оноогоогүй» гэж гарна → Засах.', '')}
+      </div></div>`;
+  }
   function renderHeat(rows) {
     const max = Math.max(1, ...rows.map((r) => r.in_count));
     const m = {}; rows.forEach((r) => { m[r.dow + '_' + r.hour] = r.in_count; });
@@ -390,14 +440,15 @@
           <td class="small">${esc(d.connection_type || '—')} · ${esc(d.ip_address || '—')}<br><span class="muted mono">${esc(d.mac_address || '')}</span></td>
           <td class="small">${esc(d.sw_release || '—')}<br><span class="muted">${esc(d.hw_platform || '')} · ${d.upload_interval === 0 ? 'бодит цаг' : d.upload_interval + ' мин'} · ${d.data_mode}</span></td>
           ${isSuper ? '' : `<td class="num">${fmt(fm[d.sn] ? fm[d.sn].in_count : 0)}</td><td class="num">${fmt(fm[d.sn] ? fm[d.sn].out_count : 0)}</td>`}
-          <td><div style="display:flex;flex-direction:column;gap:4px;align-items:flex-start">${canEdit ? `<button class="btn sm" data-edit="${d.sn}">Засах</button><button class="btn sm" data-resync="${d.sn}">Дахин татах</button>` : ''}<button class="btn sm" data-hb="${d.sn}">Лог</button></div></td></tr>`).join('') || '<tr><td colspan="10" class="empty">Төхөөрөмж хараахан холбогдоогүй байна. Төхөөрөмжийн Data Push тохиргоонд энэ серверийн хаягийг оруулна уу.</td></tr>'}
+          <td><div class="row-actions">${canEdit ? `<button class="btn sm" data-edit="${d.sn}">Засах</button><button class="btn sm ghost" data-resync="${d.sn}">Дахин татах</button>` : ''}<button class="btn sm ghost" data-hb="${d.sn}">Лог</button></div></td></tr>`).join('') || `<tr><td colspan="10"><div class="empty-state"><div class="ico">${icon('device')}</div><b>Төхөөрөмж хараахан холбогдоогүй</b><p>Төхөөрөмжийн Data Push тохиргоонд доорх серверийн хаягийг оруулмагц эхний heartbeat-ээр энд автоматаар гарч ирнэ.</p></div></td></tr>`}
       </tbody></table></div></div>
-      <div class="card"><div class="head"><h2>Төхөөрөмжийг холбох</h2>${canEdit ? '<button class="btn primary" id="claimBtn">+ SN-ээр төхөөрөмж нэмэх</button>' : ''}</div>
+      <div class="card"><div class="head"><h2>Шинэ төхөөрөмж холбох</h2>${canEdit ? '<button class="btn primary" id="claimBtn">+ SN-ээр нэмэх</button>' : ''}</div>
+        <details ${devs.length ? '' : 'open'}><summary>Төхөөрөмжийн тохиргооны заавар (Data Push)</summary>
         <p class="muted small">HX-CCD21 удирдлагын хуудас → Settings → Data Push → HTTP → Add. Протокол: <b>${location.protocol === 'https:' ? 'HTTPS' : 'HTTP'}</b>, Сервер: <b>${location.hostname}</b>, Порт: <b>${location.port || (location.protocol === 'https:' ? 443 : 80)}</b>. Interface хэсэгт замуудыг доорх байдлаар тохируулна:</p>
         <div class="code">Heartbeat:    ${location.origin}/api/camera/heartBeat
 Data upload:  ${location.origin}/api/camera/dataUpload
 REID:         ${location.origin}/api/camera/reid
-DUP:          ${location.origin}/api/camera/dup</div></div></div>`;
+DUP:          ${location.origin}/api/camera/dup</div></details></div></div>`;
     $('#page').onclick = async (e) => {
       const ed = e.target.closest('[data-edit]'); const rs = e.target.closest('[data-resync]'); const hb = e.target.closest('[data-hb]');
       if (ed) deviceModal(devs.find((d) => d.sn === ed.dataset.edit));
@@ -588,7 +639,7 @@ DUP:          ${location.origin}/api/camera/dup</div></div></div>`;
       $('#add').onclick = () => modal(`<h2>API түлхүүр үүсгэх</h2><form class="form" id="f"><label>Нэр (юунд ашиглах)<input name="name" required placeholder="ERP интеграц"></label>${tenantSelect('tenant_id', state.tenantId || (state.tenants[0] || {}).id)}<div class="actions"><button type="button" class="btn" data-close>Болих</button><button class="btn primary">Үүсгэх</button></div></form>`, (bg, close) => {
         bg.querySelector('[data-close]').onclick = close;
         bg.querySelector('#f').onsubmit = async (e) => { e.preventDefault(); try { const k = await api('/dash/api-keys', { method: 'POST', body: Object.fromEntries(new FormData(e.target)) }); close(); modal(`<h2>Түлхүүр үүслээ</h2><p class="small">Энэ түлхүүрийг <b>одоо хуулж</b> аюулгүй газар хадгална уу — дахин харагдахгүй.</p><div class="keybox"><input class="mono" readonly value="${esc(k.key)}" id="kv"><button class="btn" id="cp">Хуулах</button></div><div class="code" style="margin-top:12px">curl -H "X-API-Key: ${esc(k.key)}" \\
-  "${location.origin}/api/v1/flow/totals?from=${ubDate(-7)}&to=${ubDate(1)}"</div><div class="actions"><button class="btn primary" data-close>Хаах</button></div>`, (b2, c2) => { b2.querySelector('[data-close]').onclick = () => { c2(); SETTINGS.apikeys(); }; b2.querySelector('#cp').onclick = () => { navigator.clipboard.writeText(k.key); toast('Хуулагдлаа'); }; }); } catch (err) { toast(err.message, 'error'); } };
+  "${location.origin}/api/v1/flow/totals?from=${ubDate(-7)}&to=${ubDate(1)}"</div><div class="actions"><button class="btn primary" data-close>Хаах</button></div>`, (b2, c2) => { b2.querySelector('[data-close]').onclick = () => { c2(); SETTINGS.apikeys(); }; b2.querySelector('#cp').onclick = async (ev) => { try { await navigator.clipboard.writeText(k.key); ev.target.textContent = 'Хуулагдлаа ✓'; toast('Түлхүүр хуулагдлаа'); } catch { b2.querySelector('#kv').select(); toast('Гараар хуулна уу (Ctrl+C)', 'info'); } }; }); } catch (err) { toast(err.message, 'error'); } };
       });
       $('#tab').onclick = async (e) => { const del = e.target.closest('[data-d]'); if (del && await confirmDlg('Түлхүүрийг хүчингүй болгох уу? Үүнийг ашигладаг интеграц ажиллахаа болино.')) { await api('/dash/api-keys/' + del.dataset.d, { method: 'DELETE' }); SETTINGS.apikeys(); } };
     },

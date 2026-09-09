@@ -43,8 +43,15 @@ app.use('/dash', require('./routes/dashboard'));
 app.use('/api/v1', require('./routes/publicApi'));
 
 // Статик dashboard
-app.use(express.static(path.join(__dirname, '..', 'public'), { maxAge: '1h' }));
-app.get(['/', '/app', '/app/{*splat}'], (req, res) => res.sendFile(path.join(__dirname, '..', 'public', 'index.html')));
+// app.js/app.css: ETag-аар revalidate (шинэ deploy шууд харагдана, хуучин кэшнээс болж «хуучин UI» гарахгүй); vendor: 7 хоног
+app.use(express.static(path.join(__dirname, '..', 'public'), {
+  etag: true,
+  setHeaders(res, filePath) {
+    if (/[\\/]vendor[\\/]/.test(filePath)) res.setHeader('Cache-Control', 'public, max-age=604800, immutable');
+    else res.setHeader('Cache-Control', 'no-cache');
+  },
+}));
+app.get(['/', '/app', '/app/{*splat}'], (req, res) => { res.setHeader('Cache-Control', 'no-store'); res.sendFile(path.join(__dirname, '..', 'public', 'index.html')); });
 
 // Анхны superadmin үүсгэх (ADMIN_EMAIL / ADMIN_PASSWORD орчны хувьсагч)
 async function seedAdmin() {

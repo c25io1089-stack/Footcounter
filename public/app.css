@@ -2,7 +2,7 @@
 :root {
   color-scheme: light;
   --bg: #f6f7f9; --surface: #ffffff; --surface-2: #f3f4f6; --surface-3: #e9ecf1; --border: #e6e8ec; --border-strong: #d5d9e0;
-  --text: #0f172a; --text-2: #475569; --muted: #8b95a5;
+  --text: #0f172a; --text-2: #475569; --muted: #64748b; /* muted: цагаан дээр 4.8:1 (WCAG AA) */
   --accent: #3b82f6; --accent-hover: #2563eb; --accent-soft: #eaf2ff; --accent-ring: rgba(59,130,246,.28);
   --s1: #3b82f6; --s2: #f97316; --s3: #10b981; --s4: #f59e0b; --s5: #ec4899; --s6: #22c55e; --s7: #8b5cf6; --s8: #ef4444;
   --good: #047857; --good-soft: #e5f7ef; --bad: #b91c1c; --bad-soft: #feecec; --warn: #b45309; --warn-soft: #fff4e0; --info-soft: #eaf2ff;
@@ -15,7 +15,7 @@
   :root:not([data-theme="light"]) {
     color-scheme: dark;
     --bg: #0c0f14; --surface: #12161d; --surface-2: #1a1f28; --surface-3: #232a35; --border: #222833; --border-strong: #303846;
-    --text: #f1f5f9; --text-2: #b6c0cf; --muted: #7b8698;
+    --text: #f1f5f9; --text-2: #b6c0cf; --muted: #8d97a8;
     --accent: #5b9dff; --accent-hover: #7bb0ff; --accent-soft: #172746; --accent-ring: rgba(91,157,255,.35);
     --s1: #5b9dff; --s2: #fb8f47; --s3: #2dd4a0; --s4: #fbbf24; --s5: #f472b6; --s6: #4ade80; --s7: #a78bfa; --s8: #f87171;
     --good: #5ed394; --good-soft: #10281c; --bad: #fca5a5; --bad-soft: #3a1a1a; --warn: #fbbf24; --warn-soft: #3a2a10; --info-soft: #172746;
@@ -71,29 +71,54 @@ h1 { font-size: 20px; line-height: 1.25; } h2 { font-size: 14.5px; } h3 { font-s
 .fld { display: grid; gap: 4px; }
 .fld > span { font-size: 10.5px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); font-weight: 600; }
 .toolbar .grow { flex: 1; }
+.toolbar .upd { display: flex; flex-direction: row; align-items: center; gap: 10px; }
+.toolbar .upd > span { text-transform: none; letter-spacing: 0; font-size: 12px; font-weight: 500; }
 .content { padding: 18px 28px 48px; }
+/* Анхааруулга мөр (offline төхөөрөмж г.м.) */
+.notice { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; padding: 10px 14px; border-radius: 10px; margin-bottom: 14px; font-size: 13px; border: 1px solid transparent; }
+.notice.warn { background: var(--warn-soft); color: var(--warn); border-color: color-mix(in srgb, var(--warn) 25%, transparent); } .notice.warn a { color: inherit; font-weight: 600; }
+/* Хоёрдогч үзүүлэлтийн мөр */
+.stats { display: flex; flex-wrap: wrap; gap: 6px 22px; padding: 12px 4px 2px; color: var(--text-2); font-size: 13px; }
+.stats b { color: var(--text); font-variant-numeric: tabular-nums; font-weight: 650; }
+.g-kpi.hero { grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); }
+/* Onboarding */
+.onboard { max-width: 760px; }
+.onboard > h2 { font-size: 20px; margin-bottom: 4px; }
+.steps { display: grid; gap: 10px; margin-top: 18px; }
+.step { display: grid; grid-template-columns: 34px 1fr; gap: 14px; padding: 14px 16px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface-2); }
+.step .n { width: 30px; height: 30px; border-radius: 50%; background: var(--accent); color: #fff; display: grid; place-items: center; font-weight: 700; font-size: 13px; }
+.step.done { opacity: .7; } .step.done .n { background: var(--good); }
+.step b { display: block; font-size: 14px; } .step p { margin: 3px 0 10px; color: var(--text-2); }
+.step .btn { margin-top: 0; }
+details { border-top: 1px solid var(--border); padding-top: 10px; }
+details summary { cursor: pointer; font-weight: 600; color: var(--text-2); list-style: none; display: flex; align-items: center; gap: 8px; min-height: 40px; }
+details summary::before { content: ""; width: 7px; height: 7px; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: rotate(-45deg); transition: transform .15s; margin-left: 4px; }
+details[open] summary::before { transform: rotate(45deg); }
+details summary::-webkit-details-marker { display: none; }
 .page-enter { animation: fadeUp .22s ease-out both; }
 @keyframes fadeUp { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
 
 /* ============ Controls ============ */
-.btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; border: 1px solid var(--border-strong); background: var(--surface); padding: 7px 13px; border-radius: 9px; cursor: pointer; font-weight: 500; line-height: 1.3; box-shadow: var(--shadow-1); transition: background .15s, border-color .15s, box-shadow .15s, transform .05s; white-space: nowrap; height: 36px; }
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; border: 1px solid var(--border-strong); background: var(--surface); padding: 7px 14px; border-radius: 9px; cursor: pointer; font-weight: 500; line-height: 1.3; box-shadow: var(--shadow-1); transition: background .15s, border-color .15s, box-shadow .15s, transform .05s; white-space: nowrap; height: 40px; }
+a.btn:hover { text-decoration: none; }
 .btn:hover { background: var(--surface-2); }
 .btn:active { transform: translateY(1px); }
 .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; box-shadow: 0 1px 2px rgba(15,23,42,.1), inset 0 1px 0 rgba(255,255,255,.15); }
 .btn.primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
 .btn.danger { color: var(--bad); } .btn.danger:hover { background: var(--bad-soft); border-color: var(--bad-soft); }
 .btn.ghost { border-color: transparent; background: transparent; box-shadow: none; } .btn.ghost:hover { background: var(--surface-2); }
-.btn.sm { padding: 4px 10px; font-size: 12px; border-radius: 7px; height: 28px; }
-.btn.icon { padding: 0; width: 36px; }
+.btn.sm { padding: 4px 11px; font-size: 12.5px; border-radius: 8px; height: 32px; }
+.btn.icon { padding: 0; width: 40px; }
+.row-actions { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
 .btn:disabled, .btn.loading { opacity: .6; cursor: default; pointer-events: none; }
 .btn.loading::before { content: ""; width: 14px; height: 14px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: spin .7s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 select, input[type=text], input[type=password], input[type=email], input[type=date], input[type=time], input[type=number], input[type=datetime-local], input:not([type]) {
-  border: 1px solid var(--border-strong); background: var(--surface); padding: 7px 11px; border-radius: 9px; min-width: 0; height: 36px; transition: border-color .15s, box-shadow .15s; box-shadow: var(--shadow-1); }
+  border: 1px solid var(--border-strong); background: var(--surface); padding: 7px 11px; border-radius: 9px; min-width: 0; height: 40px; transition: border-color .15s, box-shadow .15s; box-shadow: var(--shadow-1); }
 select:focus, input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-ring); }
 select { padding-right: 30px; appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%238b95a5' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 10px center; }
 input::placeholder { color: var(--muted); }
-.seg { display: inline-flex; border: 1px solid var(--border-strong); border-radius: 9px; background: var(--surface); padding: 3px; gap: 2px; height: 36px; max-width: 100%; overflow-x: auto; scrollbar-width: none; box-shadow: var(--shadow-1); }
+.seg { display: inline-flex; border: 1px solid var(--border-strong); border-radius: 9px; background: var(--surface); padding: 3px; gap: 2px; height: 40px; max-width: 100%; overflow-x: auto; scrollbar-width: none; box-shadow: var(--shadow-1); }
 .seg::-webkit-scrollbar { display: none; }
 .seg button { border: 0; background: transparent; padding: 0 11px; border-radius: 6px; cursor: pointer; color: var(--text-2); font-weight: 500; transition: background .15s, color .15s; white-space: nowrap; flex: none; font-size: 13px; }
 .seg button:hover { color: var(--text); }
