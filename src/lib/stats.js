@@ -13,10 +13,16 @@ function scope(f, p) {
   return where.length ? ' AND ' + where.join(' AND ') : '';
 }
 
+// Query string-д '+08:00' offset-ийг encode хийлгүй өгвөл '+' → ' ' болж ирдэг ("…T00:00:00 08:00") — буцааж засна
+function normTs(v) {
+  if (typeof v !== 'string') return v;
+  return v.trim().replace(/^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?) (\d{2}:?\d{2})$/, '$1+$2');
+}
+
 function range(f, p, col = 'ts') {
   const w = [];
-  if (f.from) { p.push(f.from); w.push(`${col} >= $${p.length}`); }
-  if (f.to) { p.push(f.to); w.push(`${col} < $${p.length}`); }
+  if (f.from) { p.push(normTs(f.from)); w.push(`${col} >= $${p.length}`); }
+  if (f.to) { p.push(normTs(f.to)); w.push(`${col} < $${p.length}`); }
   return w.length ? ' AND ' + w.join(' AND ') : '';
 }
 
@@ -83,9 +89,9 @@ async function flowByLocation(f) {
      FROM locations l JOIN tenants t ON t.id=l.tenant_id
      LEFT JOIN devices d ON d.location_id=l.id
      LEFT JOIN flow_records fr ON fr.sn=d.sn AND fr.data_mode='Add' ${range(f, p, 'fr.ts')}
-     WHERE 1=1 ${f.tenantId ? (p.push(f.tenantId), `AND l.tenant_id=${p.length}`) : ''}
-       ${f.locationId ? (p.push(f.locationId), `AND l.id=${p.length}`) : ''}
-       ${f.sn ? (p.push(f.sn), `AND EXISTS (SELECT 1 FROM devices x WHERE x.location_id=l.id AND x.sn=${p.length})`) : ''}
+     WHERE 1=1 ${f.tenantId ? (p.push(f.tenantId), `AND l.tenant_id=$${p.length}`) : ''}
+       ${f.locationId ? (p.push(f.locationId), `AND l.id=$${p.length}`) : ''}
+       ${f.sn ? (p.push(f.sn), `AND EXISTS (SELECT 1 FROM devices x WHERE x.location_id=l.id AND x.sn=$${p.length})`) : ''}
      GROUP BY l.id, l.name, t.name ORDER BY in_count DESC`, p);
   return r.rows;
 }
@@ -165,8 +171,8 @@ async function demographics(f) {
 // REID — давхардалгүй хүн (өдрийн тайлан)
 function dateRange(f, p, col) {
   const w = [];
-  if (f.from) { p.push(f.from); w.push(`${col} >= ($${p.length})::date`); }
-  if (f.to) { p.push(f.to); w.push(`${col} < ($${p.length})::date`); }
+  if (f.from) { p.push(normTs(f.from)); w.push(`${col} >= ($${p.length})::date`); }
+  if (f.to) { p.push(normTs(f.to)); w.push(`${col} < ($${p.length})::date`); }
   return w.length ? ' AND ' + w.join(' AND ') : '';
 }
 
