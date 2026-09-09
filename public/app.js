@@ -103,7 +103,13 @@
   }
 
   // ================= SHELL =================
-  const NAV = [
+  // Superadmin: байгууллагуудын хяналтын самбар + төхөөрөмж + тохиргоо (байгууллагын урсгалын өгөгдөл харахгүй)
+  const NAV_SUPER = [
+    ['admin', 'Байгууллагууд', 'M12 7V3H2v18h20V7H12zM6 19H4v-2h2v2zm0-4H4v-2h2v2zm0-4H4V9h2v2zm0-4H4V5h2v2zm4 12H8v-2h2v2zm0-4H8v-2h2v2zm0-4H8V9h2v2zm0-4H8V5h2v2zm10 12h-8v-2h2v-2h-2v-2h2v-2h-2V9h8v10zm-2-8h-2v2h2v-2zm0 4h-2v2h2v-2z'],
+    ['devices', 'Төхөөрөмж', 'M4 6h16v10H4zM2 18h20v2H2z'],
+    ['settings', 'Тохиргоо', 'M19.4 13a7.7 7.7 0 000-2l2.1-1.6-2-3.5-2.5 1a7.4 7.4 0 00-1.7-1L15 3H9l-.4 2.7a7.4 7.4 0 00-1.7 1l-2.5-1-2 3.5L4.6 11a7.7 7.7 0 000 2l-2.1 1.6 2 3.5 2.5-1c.5.4 1.1.7 1.7 1L9 21h6l.4-2.7c.6-.3 1.2-.6 1.7-1l2.5 1 2-3.5L19.4 13zM12 15.5a3.5 3.5 0 110-7 3.5 3.5 0 010 7z'],
+  ];
+  const NAV_TENANT = [
     ['overview', 'Тойм', 'M3 13h8V3H3v10zm10 8h8V11h-8v10zM3 21h8v-6H3v6zm10-18v6h8V3h-8z'],
     ['locations', 'Байршил', 'M12 2C8.1 2 5 5.1 5 9c0 5.3 7 13 7 13s7-7.7 7-13c0-3.9-3.1-7-7-7zm0 9.5a2.5 2.5 0 110-5 2.5 2.5 0 010 5z'],
     ['devices', 'Төхөөрөмж', 'M4 6h16v10H4zM2 18h20v2H2z'],
@@ -111,6 +117,7 @@
     ['reid', 'Давхардалгүй зочид', 'M12 4a4 4 0 110 8 4 4 0 010-8zm0 10c4.4 0 8 1.8 8 4v2H4v-2c0-2.2 3.6-4 8-4z'],
     ['settings', 'Тохиргоо', 'M19.4 13a7.7 7.7 0 000-2l2.1-1.6-2-3.5-2.5 1a7.4 7.4 0 00-1.7-1L15 3H9l-.4 2.7a7.4 7.4 0 00-1.7 1l-2.5-1-2 3.5L4.6 11a7.7 7.7 0 000 2l-2.1 1.6 2 3.5 2.5-1c.5.4 1.1.7 1.7 1L9 21h6l.4-2.7c.6-.3 1.2-.6 1.7-1l2.5 1 2-3.5L19.4 13zM12 15.5a3.5 3.5 0 110-7 3.5 3.5 0 010 7z'],
   ];
+  let NAV = NAV_TENANT;
   function renderShell() {
     const isSuper = state.user.role === 'superadmin';
     app.innerHTML = `<div class="shell">
@@ -163,6 +170,7 @@
       const me = await api('/dash/auth/me');
       state.user = me.user; state.tenant = me.tenant;
     } catch { return renderLogin(); }
+    NAV = state.user.role === 'superadmin' ? NAV_SUPER : NAV_TENANT;
     chartDefaults();
     await loadMeta();
     renderShell();
@@ -171,11 +179,13 @@
 
   // ================= ROUTER =================
   async function render() {
-    const page = (location.hash || '#overview').slice(1).split('/')[0];
-    state.page = NAV.some((n) => n[0] === page) ? page : 'overview';
+    const home = NAV[0][0]; // superadmin → 'admin', бусад → 'overview'
+    const page = (location.hash || '#' + home).slice(1).split('/')[0];
+    state.page = NAV.some((n) => n[0] === page) ? page : home;
     document.querySelectorAll('.nav a').forEach((a) => a.classList.toggle('active', a.dataset.page === state.page));
     $('#pageTitle').textContent = NAV.find((n) => n[0] === state.page)[1];
-    $('#globalFilters').style.display = state.page === 'settings' ? 'none' : '';
+    // Superadmin-д огноо/байршлын шүүлтүүр хэрэггүй (байгууллагын өгөгдөл харахгүй)
+    $('#globalFilters').style.display = (state.page === 'settings' || state.user.role === 'superadmin') ? 'none' : '';
     killCharts();
     $('#page').innerHTML = '<div class="empty">Ачаалж байна…</div>';
     try { await PAGES[state.page](); } catch (e) { $('#page').innerHTML = `<div class="card err">Алдаа: ${esc(e.message)}</div>`; }
@@ -261,14 +271,16 @@
 
   // ================= DEVICES =================
   async function pageDevices() {
-    const devs = await api('/dash/devices' + qs());
-    const flow = await api('/dash/overview' + qs({ granularity: 'day' }));
+    const isSuper = state.user.role === 'superadmin';
+    const devs = await api('/dash/devices' + (isSuper ? '' : qs()));
+    // Superadmin урсгалын тоо харахгүй — зөвхөн төхөөрөмжийн төлөв
+    const flow = isSuper ? { by_device: [] } : await api('/dash/overview' + qs({ granularity: 'day' }));
     const fm = {}; flow.by_device.forEach((d) => { fm[d.sn] = d; });
     const canEdit = ['superadmin', 'admin'].includes(state.user.role);
     const unassigned = devs.filter((d) => !d.location_id);
     $('#page').innerHTML = `<div class="stack">
       ${unassigned.length ? `<div class="card" style="border-color:var(--warn)"><b>⚠ ${unassigned.length} шинэ төхөөрөмж байршилд оноогдоогүй байна.</b> <span class="muted">Төхөөрөмж сервер рүү өгөгдөл илгээж эхэлмэгц энд автоматаар бүртгэгдэнэ — нэр, байршил оноож өгнө үү.</span></div>` : ''}
-      <div class="card"><div class="tbl-wrap"><table><thead><tr><th>Төлөв</th><th>Нэр / SN</th><th>Байршил</th><th>Сүүлийн heartbeat</th><th>Сүүлийн өгөгдөл</th><th>Холболт</th><th>Firmware</th><th class="num">Орсон</th><th class="num">Гарсан</th><th></th></tr></thead><tbody>
+      <div class="card"><div class="tbl-wrap"><table><thead><tr><th>Төлөв</th><th>Нэр / SN</th><th>Байршил</th><th>Сүүлийн heartbeat</th><th>Сүүлийн өгөгдөл</th><th>Холболт</th><th>Firmware</th>${isSuper ? '' : '<th class="num">Орсон</th><th class="num">Гарсан</th>'}<th></th></tr></thead><tbody>
         ${devs.map((d) => `<tr>
           <td><span class="pill ${d.online ? 'on' : d.last_heartbeat ? 'off' : 'na'}"><i class="dot"></i>${d.online ? 'Online' : d.last_heartbeat ? 'Offline' : 'Мэдээгүй'}</span></td>
           <td><b>${esc(d.name || '(нэргүй)')}</b><br><span class="mono muted">${esc(d.sn)}</span></td>
@@ -276,7 +288,7 @@
           <td title="${fmtDT(d.last_heartbeat)}">${ago(d.last_heartbeat)}</td><td title="${fmtDT(d.last_data_at)}">${ago(d.last_data_at)}</td>
           <td class="small">${esc(d.connection_type || '—')} · ${esc(d.ip_address || '—')}<br><span class="muted mono">${esc(d.mac_address || '')}</span></td>
           <td class="small">${esc(d.sw_release || '—')}<br><span class="muted">${esc(d.hw_platform || '')} · ${d.upload_interval === 0 ? 'бодит цаг' : d.upload_interval + ' мин'} · ${d.data_mode}</span></td>
-          <td class="num">${fmt(fm[d.sn] ? fm[d.sn].in_count : 0)}</td><td class="num">${fmt(fm[d.sn] ? fm[d.sn].out_count : 0)}</td>
+          ${isSuper ? '' : `<td class="num">${fmt(fm[d.sn] ? fm[d.sn].in_count : 0)}</td><td class="num">${fmt(fm[d.sn] ? fm[d.sn].out_count : 0)}</td>`}
           <td><div style="display:flex;flex-direction:column;gap:4px;align-items:flex-start">${canEdit ? `<button class="btn sm" data-edit="${d.sn}">Засах</button><button class="btn sm" data-resync="${d.sn}">Дахин татах</button>` : ''}<button class="btn sm" data-hb="${d.sn}">Лог</button></div></td></tr>`).join('') || '<tr><td colspan="10" class="empty">Төхөөрөмж хараахан холбогдоогүй байна. Төхөөрөмжийн Data Push тохиргоонд энэ серверийн хаягийг оруулна уу.</td></tr>'}
       </tbody></table></div></div>
       <div class="card"><div class="head"><h2>Төхөөрөмжийг холбох</h2>${canEdit ? '<button class="btn primary" id="claimBtn">+ SN-ээр төхөөрөмж нэмэх</button>' : ''}</div>
@@ -524,9 +536,43 @@ POST ${O}/api/camera/dup          — өдрийн DUP (realtime + final) тай
     modal(`<h2>Нууц үг солих</h2><form class="form" id="f"><label>Одоогийн нууц үг<input type="password" name="current" required></label><label>Шинэ нууц үг<input type="password" name="next" required minlength="6"></label><div class="actions"><button type="button" class="btn" data-close>Болих</button><button class="btn primary">Солих</button></div></form>`, (bg, close) => { bg.querySelector('[data-close]').onclick = close; bg.querySelector('#f').onsubmit = async (e) => { e.preventDefault(); try { await api('/dash/auth/password', { method: 'POST', body: Object.fromEntries(new FormData(e.target)) }); toast('Нууц үг солигдлоо'); close(); } catch (err) { toast(err.message); } }; });
   }
 
-  const PAGES = { overview: pageOverview, locations: pageLocations, devices: pageDevices, demographics: pageDemographics, reid: pageReid, settings: pageSettings };
+  // ================= SUPERADMIN: БАЙГУУЛЛАГУУД =================
+  const bytes = (b) => (b == null ? '—' : b < 1048576 ? Math.round(b / 1024) + ' KB' : b < 1073741824 ? (b / 1048576).toFixed(1) + ' MB' : (b / 1073741824).toFixed(2) + ' GB');
+  async function pageAdmin() {
+    const s = await api('/dash/admin/summary');
+    const t = s.totals;
+    const offline = t.devices - t.devices_online;
+    const stale = (d) => !d || (Date.now() - new Date(d)) > 24 * 3600 * 1000; // 24 цагаас дээш өгөгдөл ирээгүй
+    $('#page').innerHTML = `
+      <div class="grid g-kpi">
+        <div class="card kpi accent"><div class="label">Байгууллага</div><div class="value">${fmt(t.tenants)}</div><span class="delta">${fmt(t.locations)} байршил</span></div>
+        <div class="card kpi"><div class="label">Төхөөрөмж</div><div class="value">${fmt(t.devices_online)}<span class="muted" style="font-size:16px">/${fmt(t.devices)}</span></div><span class="delta ${offline ? 'down' : 'up'}">${offline ? offline + ' offline' : t.devices ? 'бүгд online' : 'холбогдоогүй'}</span></div>
+        <div class="card kpi"><div class="label">Оноогоогүй төхөөрөмж</div><div class="value">${fmt(t.devices_unassigned)}</div><span class="delta ${t.devices_unassigned ? 'down' : ''}">${t.devices_unassigned ? 'байршил оноох хэрэгтэй' : 'бүгд оноогдсон'}</span></div>
+        <div class="card kpi"><div class="label">Хэрэглэгч</div><div class="value">${fmt(t.users)}</div><span class="delta">${fmt(t.superadmins)} супер админ</span></div>
+        <div class="card kpi"><div class="label">API түлхүүр</div><div class="value">${fmt(t.api_keys)}</div><span class="delta">идэвхтэй</span></div>
+        <div class="card kpi"><div class="label">Ingest алдаа</div><div class="value">${fmt(t.ingest_errors_24h)}</div><span class="delta ${t.ingest_errors_24h ? 'down' : 'up'}">сүүлийн 24 цагт</span></div>
+        <div class="card kpi"><div class="label">Сүүлийн өгөгдөл</div><div class="value" style="font-size:20px">${ago(t.last_data_at)}</div><span class="delta">DB: ${bytes(t.db_bytes)}</span></div>
+      </div>
+      ${s.unassigned_devices.length ? `<div class="card section" style="border-color:var(--warn)"><div class="head"><h2>⚠ Оноогоогүй төхөөрөмж</h2><span class="sub">${s.unassigned_devices.length} ш — <a href="#devices">Төхөөрөмж хуудсанд</a> байршил оноож өгнө</span></div><div class="tbl-wrap"><table><thead><tr><th>Төлөв</th><th>SN</th><th>IP</th><th>Firmware</th><th>Анх холбогдсон</th><th>Сүүлийн heartbeat</th></tr></thead><tbody>
+        ${s.unassigned_devices.map((d) => `<tr><td><span class="pill ${d.online ? 'on' : 'off'}"><i class="dot"></i>${d.online ? 'Online' : 'Offline'}</span></td><td class="mono">${esc(d.sn)}</td><td class="small">${esc(d.ip_address || '—')}</td><td class="small">${esc(d.sw_release || '—')}</td><td class="small muted">${fmtDT(d.first_seen)}</td><td>${ago(d.last_heartbeat)}</td></tr>`).join('')}</tbody></table></div></div>` : ''}
+      <div class="card section"><div class="head"><h2>Байгууллагууд</h2><span class="sub">${s.tenants.length} байгууллага · <a href="#settings/tenants">удирдах</a></span></div><div class="tbl-wrap"><table><thead><tr><th>Байгууллага</th><th>Админ</th><th class="num">Байршил</th><th>Төхөөрөмж</th><th class="num">Хэрэглэгч</th><th class="num">API</th><th>Сүүлийн өгөгдөл</th><th>Үүссэн</th></tr></thead><tbody>
+        ${s.tenants.map((x) => `<tr>
+          <td><b>${esc(x.name)}</b><br><span class="mono muted small">${esc(x.slug)}</span></td>
+          <td class="small">${x.admin_emails ? esc(x.admin_emails) : '<span class="pill warn">Админгүй</span>'}</td>
+          <td class="num">${fmt(x.location_count)}</td>
+          <td><span class="pill ${x.device_count === 0 ? 'na' : x.online_count === x.device_count ? 'on' : x.online_count ? 'warn' : 'off'}"><i class="dot"></i>${x.online_count}/${x.device_count} online</span></td>
+          <td class="num">${fmt(x.user_count)}</td>
+          <td class="num" title="${x.api_last_used ? 'сүүлд ашигласан ' + fmtDT(x.api_last_used) : ''}">${fmt(x.api_key_count)}</td>
+          <td title="${fmtDT(x.last_data_at)}" class="${x.device_count && stale(x.last_data_at) ? 'err' : ''}">${x.device_count ? ago(x.last_data_at) : '<span class="muted">төхөөрөмжгүй</span>'}</td>
+          <td class="small muted">${fmtDT(x.created_at)}</td></tr>`).join('') || '<tr><td colspan="8" class="empty">Байгууллага байхгүй — <a href="#settings/tenants">Тохиргоо → Байгууллага</a> хэсгээс үүсгэнэ</td></tr>'}
+      </tbody></table></div></div>
+      ${s.recent_errors.length ? `<div class="card section"><div class="head"><h2>Сүүлийн ingest алдаа</h2><span class="sub"><a href="#settings/log">бүгдийг харах</a></span></div><div class="tbl-wrap"><table><thead><tr><th>Цаг</th><th>Зам</th><th>SN</th><th>Код</th><th>Мессеж</th></tr></thead><tbody>
+        ${s.recent_errors.map((r) => `<tr><td class="small">${fmtDT(r.created_at)}</td><td class="mono">${esc(r.path)}</td><td class="mono">${esc(r.sn || '')}</td><td>${r.status}</td><td>${esc(r.message || '')}</td></tr>`).join('')}</tbody></table></div></div>` : ''}`;
+  }
+
+  const PAGES = { admin: pageAdmin, overview: pageOverview, locations: pageLocations, devices: pageDevices, demographics: pageDemographics, reid: pageReid, settings: pageSettings };
 
   // Бодит цагийн шинэчлэл: тойм хуудсыг 60 сек тутам
-  setInterval(() => { if (state.user && state.page === 'overview' && !document.hidden && !document.querySelector('.modal-bg')) render(); }, 60000);
+  setInterval(() => { if (state.user && (state.page === 'overview' || state.page === 'admin') && !document.hidden && !document.querySelector('.modal-bg')) render(); }, 60000);
   boot();
 })();

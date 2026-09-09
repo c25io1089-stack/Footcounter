@@ -49,7 +49,44 @@ function filters(req) {
 }
 const wrap = (fn) => (req, res) => fn(req, res).catch((e) => { console.error(e); res.status(500).json({ error: e.message }); });
 
-// ---- Өгөгдөл ----
+// ---- Superadmin-ий самбар: байгууллагуудын тоо, төлөв — байгууллагын урсгалын өгөгдөл ОРОХГҮЙ ----
+router.get('/admin/summary', auth.requireRole('superadmin'), wrap(async (req, res) => {
+  const W = stats.ONLINE_WINDOW_MIN;
+  const [totals, tenants, unassigned, errors] = await Promise.all([
+    query(`SELECT
+        (SELECT count(*)::int FROM tenants) AS tenants,
+        (SELECT count(*)::int FROM locations) AS locations,
+        (SELECT count(*)::int FROM devices) AS devices,
+        (SELECT count(*)::int FROM devices WHERE last_heartbeat > now() - interval '${W} minutes') AS devices_online,
+        (SELECT count(*)::int FROM devices WHERE tenant_id IS NULL OR location_id IS NULL) AS devices_unassigned,
+        (SELECT count(*)::int FROM users WHERE role<>'superadmin') AS users,
+        (SELECT count(*)::int FROM users WHERE role='superadmin') AS superadmins,
+        (SELECT count(*)::int FROM api_keys WHERE revoked_at IS NULL) AS api_keys,
+        (SELECT count(*)::int FROM ingest_log WHERE created_at > now() - interval '24 hours') AS ingest_errors_24h,
+        (SELECT max(last_data_at) FROM devices) AS last_data_at,
+        pg_database_size(current_database())::bigint AS db_bytes`),
+    query(`SELECT t.id, t.name, t.slug, t.created_at,
+        (SELECT string_agg(u.email, ', ' ORDER BY u.email) FROM users u WHERE u.tenant_id=t.id AND u.role='admin') AS admin_emails,
+        (SELECT count(*)::int FROM users u WHERE u.tenant_id=t.id) AS user_count,
+        (SELECT count(*)::int FROM locations l WHERE l.tenant_id=t.id) AS location_count,
+        (SELECT count(*)::int FROM devices d WHERE d.tenant_id=t.id) AS device_count,
+        (SELECT count(*)::int FROM devices d WHERE d.tenant_id=t.id AND d.last_heartbeat > now() - interval '${W} minutes') AS online_count,
+        (SELECT count(*)::int FROM api_keys k WHERE k.tenant_id=t.id AND k.revoked_at IS NULL) AS api_key_count,
+        (SELECT max(k.last_used) FROM api_keys k WHERE k.tenant_id=t.id) AS api_last_used,
+        (SELECT max(d.last_data_at) FROM devices d WHERE d.tenant_id=t.id) AS last_data_at,
+        (SELECT max(d.last_heartbeat) FROM devices d WHERE d.tenant_id=t.id) AS last_heartbeat
+      FROM tenants t ORDER BY t.name`),
+    query(`SELECT d.sn, d.name, d.tenant_id, d.location_id, d.first_seen, d.last_heartbeat, d.ip_address, d.sw_release,
+        (d.last_heartbeat > now() - interval '${W} minutes') AS online
+      FROM devices d WHERE d.tenant_id IS NULL OR d.location_id IS NULL ORDER BY d.first_seen DESC`),
+    query(`SELECT path, sn, status, message, created_at FROM ingest_log ORDER BY id DESC LIMIT 10`),
+  ]);
+  res.json({ totals: totals.rows[0], tenants: tenants.rows, unassigned_devices: unassigned.rows, recent_errors: errors.rows, online_window_min: W });
+}));
+
+// ---- Өгөгдөл (зөвхөн байгууллагын admin/viewer; superadmin байгууллагын өгөгдлийг харахгүй) ----
+const tenantData = auth.requireRole('admin', 'viewer');
+router.use(['/overview', '/flow', '/occupancy', '/demographics', '/events', '/reid', '/dedup'], tenantData);
 router.get('/overview', wrap(async (req, res) => {
   const f = filters(req);
   const [totals, occupancy, byLocation, byDevice, series] = await Promise.all([
