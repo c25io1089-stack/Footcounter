@@ -13,8 +13,14 @@ if (!connectionString) {
   process.exit(1);
 }
 
-// Railway Postgres нь SSL шаарддаг; local-д хэрэггүй
-const needSsl = /railway|render|supabase|neon|amazonaws/i.test(connectionString) || process.env.PGSSL === '1';
+// SSL: Railway-ийн ГАДААД proxy (proxy.rlwy.net), Render/Supabase/Neon/RDS шаарддаг; local болон Railway-ийн
+// ДОТООД сүлжээ (*.railway.internal — SSL дэмждэггүй, SSL албадвал "server does not support SSL" гэж унана) хэрэггүй.
+// PGSSL=1 албадан асаана, PGSSL=0 албадан унтраана; URL-д sslmode=disable байвал мөн унтарна.
+const url = connectionString.toLowerCase();
+let needSsl = /rlwy\.net|railway\.app|render\.com|supabase|neon\.tech|amazonaws/.test(url);
+if (/\.railway\.internal|sslmode=disable/.test(url)) needSsl = false;
+if (process.env.PGSSL === '1') needSsl = true;
+if (process.env.PGSSL === '0') needSsl = false;
 // Огноо-only ('2026-09-01') утгууд серверийн биш, дэлгүүрийн цагийн бүсээр тайлбарлагдана (Railway UTC дээр ч).
 // Startup параметрээр өгнө — холболт бүрд SET явуулах шаардлагагүй.
 const APP_TZ = process.env.APP_TZ || 'Asia/Ulaanbaatar';
