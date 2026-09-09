@@ -1,7 +1,7 @@
 {
-  "name": "hxccd21-dashboard",
+  "name": "footfall",
   "version": "1.0.0",
-  "description": "HX-CCD21 3D AI хүн тоологчийн олон tenant dashboard + API",
+  "description": "Footfall — HX-CCD21 3D AI хүн тоологчийн олон tenant dashboard + API",
   "main": "src/server.js",
   "scripts": {
     "start": "node src/server.js",

@@ -1,4 +1,4 @@
-# HX-CCD21 Хүний урсгалын Dashboard + API
+# Footfall — Хүний урсгалын Dashboard + API (HX-CCD21)
 
 FOORIR **HX-CCD21 (3D AI хүн тоологч)** төхөөрөмжөөс HTTP POST-оор ирэх өгөгдлийг хүлээн авч, олон байгууллага (tenant), олон байршлын хэмжээнд Монгол хэлээр харуулах dashboard болон API key-тэй REST API. Railway дээр нэг сервисээр (Node.js + PostgreSQL) ажиллана.
 

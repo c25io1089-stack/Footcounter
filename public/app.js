@@ -86,7 +86,7 @@
   function renderLogin(err = '') {
     killCharts();
     app.innerHTML = `<div class="login"><div class="card">
-      <div class="brand"><div class="logo">HX</div><div><b>Хүний урсгалын систем</b><small>HX-CCD21 3D AI тоологч</small></div></div>
+      <div class="brand"><div class="logo">F</div><div><b>Footfall</b><small>Хүний урсгалын систем</small></div></div>
       <h1>Нэвтрэх</h1><p>Бүртгэлтэй и-мэйл, нууц үгээ оруулна уу.</p>
       <form class="form" id="loginForm">
         <label>И-мэйл<input type="email" name="email" required autocomplete="username"></label>
@@ -115,7 +115,7 @@
     const isSuper = state.user.role === 'superadmin';
     app.innerHTML = `<div class="shell">
       <aside class="sidebar">
-        <div class="brand"><div class="logo">HX</div><div><b>Хүний урсгал</b><small>${esc(state.tenant ? state.tenant.name : 'Бүх байгууллага')}</small></div></div>
+        <div class="brand"><div class="logo">F</div><div><b>Footfall</b><small>${esc(state.tenant ? state.tenant.name : 'Бүх байгууллага')}</small></div></div>
         <nav class="nav">${NAV.map(([k, t, d]) => `<a href="#${k}" data-page="${k}"><svg viewBox="0 0 24 24" fill="currentColor"><path d="${d}"/></svg><span>${t}</span></a>`).join('')}</nav>
         <div class="spacer"></div>
         <div class="userbox"><b>${esc(state.user.name || state.user.email)}</b>${esc(state.user.email)} · ${roleName(state.user.role)}<br>
