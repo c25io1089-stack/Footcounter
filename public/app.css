@@ -275,7 +275,7 @@ tbody tr { transition: background .1s; } tbody tr:hover td { background: var(--s
   .topbar h1 { font-size: 18px; }
   .card { padding: 14px; border-radius: 12px; }
   .tbl-wrap { margin: 0 -14px; padding: 0 14px; }
-  .g-kpi { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .g-kpi, .g-kpi.hero { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
   .kpi .value { font-size: 24px; } .kpi .spark { width: 56px; }
   .toolbar .grow, .toolbar #refreshBtn { display: none; }
   .chart-wrap { height: 240px; }
