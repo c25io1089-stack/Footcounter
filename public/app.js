@@ -105,6 +105,40 @@
   const initials = (s) => String(s || '?').trim().split(/[\s@._-]+/).filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join('') || '?';
   const skeleton = () => `<div class="grid g-kpi"><div class="skeleton sk-kpi"></div><div class="skeleton sk-kpi"></div><div class="skeleton sk-kpi"></div><div class="skeleton sk-kpi"></div></div><div class="grid g-2 section"><div class="skeleton sk-block"></div><div class="skeleton sk-block"></div></div>`;
 
+  // ---- KPI карт: icon + label + value + delta chip + sparkline ----
+  const ICO = {
+    in: '<path d="M12 3v12m0 0 4-4m-4 4-4-4M4 21h16"/>', out: '<path d="M12 15V3m0 0 4 4m-4-4-4 4M4 21h16"/>',
+    people: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>',
+    pass: '<path d="M4 12h16m0 0-5-5m5 5-5 5"/>', back: '<path d="M9 14 4 9l5-5M4 9h11a5 5 0 0 1 0 10h-2"/>',
+    clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>', device: '<rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/>',
+    building: '<path d="M3 21h18M5 21V5a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v16M15 9h2a2 2 0 0 1 2 2v10M9 7h2M9 11h2M9 15h2"/>',
+    warn: '<path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0zM12 9v4M12 17h.01"/>',
+    users: '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/>',
+    key: '<path d="m21 2-2 2m-7.6 7.6a5.5 5.5 0 1 1-7.8 7.8 5.5 5.5 0 0 1 7.8-7.8zm0 0L19 4m-3 3 2 2"/>',
+    alert: '<circle cx="12" cy="12" r="9"/><path d="M12 8v4M12 16h.01"/>', db: '<ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v14c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/>',
+    pulse: '<path d="M22 12h-4l-3 9L9 3l-3 9H2"/>',
+  };
+  const icon = (n) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ICO[n] || ICO.pulse}</svg>`;
+  // kpi({label, value, sub, delta:{cur,prev,label}, ico, c (өнгө 1-8), spark:[..], accent})
+  function kpi(o) {
+    let chip = '';
+    if (o.delta) {
+      const { cur, prev } = o.delta;
+      if (!prev) chip = `<span class="delta">өмнөх үе: —</span>`;
+      else { const d = Math.round(((cur - prev) / prev) * 100); chip = `<span class="delta ${d > 0 ? 'up' : d < 0 ? 'down' : ''}" title="өмнөх ижил урттай үетэй харьцуулахад">${d > 0 ? '↑' : d < 0 ? '↓' : '•'} ${Math.abs(d)}%</span>`; }
+    } else if (o.sub) chip = `<span class="delta ${o.subClass || ''}">${o.sub}</span>`;
+    const spark = o.spark && o.spark.length > 1 ? `<div class="spark"><canvas data-v="${o.spark.join(',')}" data-c="${o.c || 1}"></canvas></div>` : '';
+    return `<div class="card kpi ${o.accent ? 'accent' : ''}"><div class="top"><div class="ico c${o.c || 1}">${icon(o.ico)}</div><div class="label">${o.label}</div></div><div class="value">${o.value}</div><div class="bottom">${chip}${spark}</div></div>`;
+  }
+  function drawSparks() {
+    document.querySelectorAll('.spark canvas').forEach((el, i) => {
+      const v = el.dataset.v.split(',').map(Number); const col = css('--s' + el.dataset.c);
+      const id = 'spark' + i + '_' + Date.now(); el.id = id;
+      mk(id, { type: 'line', data: { labels: v.map((_, k) => k), datasets: [{ data: v, borderColor: col, backgroundColor: col + '22', fill: true, tension: .4, borderWidth: 1.5, pointRadius: 0 }] },
+        options: { responsive: true, maintainAspectRatio: false, animation: false, plugins: { legend: { display: false }, tooltip: { enabled: false } }, scales: { x: { display: false }, y: { display: false, beginAtZero: true } }, elements: { line: { capBezierPoints: true } } } });
+    });
+  }
+
   // ---- Chart helpers (Chart.js) ----
   function chartDefaults() {
     Chart.defaults.color = css('--text-2'); Chart.defaults.borderColor = css('--border');
@@ -127,7 +161,11 @@
         <div>
           <h2>Дэлгүүрийнхээ урсгалыг<br>тоогоор удирд.</h2>
           <p>HX-CCD21 3D AI тоологчоос ирэх орсон, гарсан, өнгөрсөн хүний тоо, зочны нас, хүйс, давхардалгүй зочид — олон байршил, бодит цагт.</p>
-          <ul><li>Бодит цагийн орсон/гарсан ба одоо байгаа хүн</li><li>Долоо хоногийн өдөр × цагийн нягтрал</li><li>Зочны портрет, REID давхардалгүй зочид</li><li>ERP/BI-д зориулсан REST API</li></ul>
+          <div class="mock" aria-hidden="true">
+            <div class="mk"><div><small>Орсон</small><b>12,148</b><i>↑ 8%</i></div><div><small>Одоо байгаа</small><b>39</b><i>бодит цагт</i></div><div><small>Орох хувь</small><b>63%</b><i>↑ 2%</i></div></div>
+            <div class="bars">${[38, 30, 52, 44, 70, 62, 88, 80, 64, 58, 46, 40, 74, 66].map((h) => `<span style="height:${h}%"></span>`).join('')}</div>
+          </div>
+          <ul><li>Бодит цагийн орсон/гарсан</li><li>Өдөр × цагийн нягтрал</li><li>Зочны портрет, REID</li><li>REST API (ERP/BI)</li></ul>
         </div>
         <div class="foot">© ${new Date().getFullYear()} Footfall · Chipmo</div>
       </aside>
@@ -171,7 +209,9 @@
     const isSuper = state.user.role === 'superadmin';
     app.innerHTML = `<div class="shell">
       <aside class="sidebar">
-        <div class="brand"><div class="logo">F</div><div><b>Footfall</b><small>${esc(state.tenant ? state.tenant.name : 'Бүх байгууллага')}</small></div></div>
+        <div class="brand"><div class="logo">F</div><div><b>Footfall</b><small>Хүний урсгалын систем</small></div></div>
+        <div class="ws"><span class="dot"></span><b>${esc(state.tenant ? state.tenant.name : 'Бүх байгууллага')}</b><small>${isSuper ? 'superadmin' : 'workspace'}</small></div>
+        <div class="nav-label">Цэс</div>
         <nav class="nav">${NAV.map(([k, t, d]) => `<a href="#${k}" data-page="${k}"><svg viewBox="0 0 24 24" fill="currentColor"><path d="${d}"/></svg><span>${t}</span></a>`).join('')}</nav>
         <div class="spacer"></div>
         <div class="userbox"><div class="avatar">${esc(initials(state.user.name || state.user.email))}</div><div class="who"><b>${esc(state.user.name || state.user.email)}</b><span>${roleName(state.user.role)}</span>
@@ -182,15 +222,17 @@
           <div class="umenu"><button class="avatar" id="umBtn" aria-label="Хэрэглэгчийн цэс">${esc(initials(state.user.name || state.user.email))}</button>
             <div class="pop" id="umPop" hidden><div class="who"><b>${esc(state.user.name || state.user.email)}</b>${esc(state.user.email)} · ${roleName(state.user.role)}</div>
               <button type="button" id="umPw">Нууц үг солих</button><button type="button" class="danger" id="umOut">Гарах</button></div></div>
-          <div class="filters" id="globalFilters">
-            ${isSuper ? `<select id="fTenant"><option value="">Бүх байгууллага</option>${state.tenants.map((t) => `<option value="${t.id}" ${String(t.id) === String(state.tenantId) ? 'selected' : ''}>${esc(t.name)}</option>`).join('')}</select>` : ''}
-            <select id="fLocation"></select>
-            <select id="fDevice"></select>
-            <div class="seg" id="fRange">${[['today', 'Өнөөдөр'], ['7d', '7 хоног'], ['30d', '30 хоног'], ['90d', '90 хоног'], ['custom', 'Хугацаа']].map(([k, t]) => `<button data-r="${k}" class="${state.range === k ? 'active' : ''}">${t}</button>`).join('')}</div>
-            <span id="customRange" ${state.range === 'custom' ? '' : 'hidden'}><input type="date" id="fFrom" value="${state.from}"> – <input type="date" id="fTo" value="${state.to}"></span>
-            <button class="btn" id="refreshBtn" title="Шинэчлэх">↻</button>
-          </div></div>
-        <div id="page"></div>
+        </div>
+        <div class="toolbar" id="globalFilters">
+          ${isSuper ? `<label class="fld"><span>Байгууллага</span><select id="fTenant"><option value="">Бүх байгууллага</option>${state.tenants.map((t) => `<option value="${t.id}" ${String(t.id) === String(state.tenantId) ? 'selected' : ''}>${esc(t.name)}</option>`).join('')}</select></label>` : ''}
+          <label class="fld"><span>Байршил</span><select id="fLocation"></select></label>
+          <label class="fld"><span>Төхөөрөмж</span><select id="fDevice"></select></label>
+          <div class="fld range"><span>Хугацаа</span><div class="filters"><div class="seg" id="fRange">${[['today', 'Өнөөдөр'], ['7d', '7 хоног'], ['30d', '30 хоног'], ['90d', '90 хоног'], ['custom', 'Сонгох']].map(([k, t]) => `<button data-r="${k}" class="${state.range === k ? 'active' : ''}">${t}</button>`).join('')}</div>
+            <span id="customRange" class="filters" ${state.range === 'custom' ? '' : 'hidden'}><input type="date" id="fFrom" value="${state.from}"> – <input type="date" id="fTo" value="${state.to}"></span></div></div>
+          <div class="grow"></div>
+          <button class="btn icon" id="refreshBtn" title="Шинэчлэх" aria-label="Шинэчлэх"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.6-6.4M21 3v6h-6"/></svg></button>
+        </div>
+        <div class="content"><div id="page"></div></div>
       </main></div>`;
     fillLocationSelects();
     const logout = async (e) => { e && e.preventDefault(); await api('/dash/auth/logout', { method: 'POST' }); location.hash = ''; state.user = null; renderLogin(); };
@@ -268,13 +310,13 @@
     }
     $('#page').innerHTML = `
       <div class="grid g-kpi">
-        <div class="card kpi accent"><div class="label">Орсон</div><div class="value">${fmt(t.in_count)}</div>${delta(t.in_count, prev.in_count)}</div>
-        <div class="card kpi"><div class="label">Гарсан</div><div class="value">${fmt(t.out_count)}</div>${delta(t.out_count, prev.out_count)}</div>
-        <div class="card kpi"><div class="label">Одоо байгаа хүн</div><div class="value">${fmt(ov.occupancy.total)}</div><span class="delta">бодит цагийн тооцоо</span></div>
-        <div class="card kpi"><div class="label">Өнгөрсөн (орохгүй)</div><div class="value">${fmt(t.passby)}</div><span class="delta">орох хувь: ${pct(t.in_count, t.in_count + t.passby)}</span></div>
-        <div class="card kpi"><div class="label">Буцсан</div><div class="value">${fmt(t.turnback)}</div>${delta(t.turnback, prev.turnback)}</div>
-        <div class="card kpi"><div class="label">Дундаж байх хугацаа</div><div class="value">${dur(t.avg_stay_ms)}</div><span class="delta">камерын талбайд</span></div>
-        <div class="card kpi"><div class="label">Төхөөрөмж</div><div class="value">${online}<span class="muted" style="font-size:16px">/${ov.by_device.length}</span></div><span class="delta ${online < ov.by_device.length ? 'down' : 'up'}">${online < ov.by_device.length ? ov.by_device.length - online + ' offline' : 'бүгд online'}</span></div>
+        ${kpi({ label: 'Орсон', value: fmt(t.in_count), delta: { cur: t.in_count, prev: prev.in_count }, ico: 'in', c: 1, accent: true, spark: ov.series.map((s) => s.in_count) })}
+        ${kpi({ label: 'Гарсан', value: fmt(t.out_count), delta: { cur: t.out_count, prev: prev.out_count }, ico: 'out', c: 2, spark: ov.series.map((s) => s.out_count) })}
+        ${kpi({ label: 'Одоо байгаа хүн', value: fmt(ov.occupancy.total), sub: 'бодит цагт', ico: 'people', c: 3 })}
+        ${kpi({ label: 'Өнгөрсөн (орохгүй)', value: fmt(t.passby), sub: 'орох хувь ' + pct(t.in_count, t.in_count + t.passby), ico: 'pass', c: 4, spark: ov.series.map((s) => s.passby) })}
+        ${kpi({ label: 'Буцсан', value: fmt(t.turnback), delta: { cur: t.turnback, prev: prev.turnback }, ico: 'back', c: 5, spark: ov.series.map((s) => s.turnback) })}
+        ${kpi({ label: 'Дундаж байх хугацаа', value: dur(t.avg_stay_ms), sub: 'камерын талбайд', ico: 'clock', c: 7 })}
+        ${kpi({ label: 'Төхөөрөмж', value: `${online}<span class="muted" style="font-size:16px;font-weight:500">/${ov.by_device.length}</span>`, sub: online < ov.by_device.length ? ov.by_device.length - online + ' offline' : 'бүгд online', subClass: online < ov.by_device.length ? 'down' : 'up', ico: 'device', c: online < ov.by_device.length ? 8 : 3 })}
       </div>
       <div class="grid g-2 section">
         <div class="card"><div class="head"><h2>Хүний урсгал</h2><span class="sub">${g === 'hour' ? 'цагаар' : g === 'day' ? 'өдрөөр' : '7 хоногоор'}</span></div><div class="chart-wrap"><canvas id="cFlow"></canvas></div></div>
@@ -295,9 +337,10 @@
         { label: 'Гарсан', data: ov.series.map((s) => s.out_count), borderColor: css('--s2'), backgroundColor: css('--s2'), tension: .3, pointRadius: 0, borderWidth: 2, borderRadius: 4 },
         { label: 'Өнгөрсөн', data: ov.series.map((s) => s.passby), borderColor: css('--s3'), backgroundColor: css('--s3'), tension: .3, pointRadius: 0, borderWidth: 2, borderRadius: 4, hidden: g !== 'hour' },
       ] },
-      options: { responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false }, scales: { x: { grid: { display: false } }, y: { beginAtZero: true, grid: { color: css('--border') } } }, plugins: { legend: { position: 'top', align: 'end' } } },
+      options: { responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false }, scales: { x: { grid: { display: false } }, y: { beginAtZero: true, grid: { color: css('--border') }, border: { display: false } } }, plugins: { legend: { position: 'top', align: 'end' } } },
     });
     renderHeat(heat);
+    drawSparks();
   }
   const shift = (iso, days) => new Date(new Date(iso).getTime() + days * 86400000).toISOString();
   function renderHeat(rows) {
@@ -603,13 +646,13 @@ POST ${O}/api/camera/dup          — өдрийн DUP (realtime + final) тай
     const stale = (d) => !d || (Date.now() - new Date(d)) > 24 * 3600 * 1000; // 24 цагаас дээш өгөгдөл ирээгүй
     $('#page').innerHTML = `
       <div class="grid g-kpi">
-        <div class="card kpi accent"><div class="label">Байгууллага</div><div class="value">${fmt(t.tenants)}</div><span class="delta">${fmt(t.locations)} байршил</span></div>
-        <div class="card kpi"><div class="label">Төхөөрөмж</div><div class="value">${fmt(t.devices_online)}<span class="muted" style="font-size:16px">/${fmt(t.devices)}</span></div><span class="delta ${offline ? 'down' : 'up'}">${offline ? offline + ' offline' : t.devices ? 'бүгд online' : 'холбогдоогүй'}</span></div>
-        <div class="card kpi"><div class="label">Оноогоогүй төхөөрөмж</div><div class="value">${fmt(t.devices_unassigned)}</div><span class="delta ${t.devices_unassigned ? 'down' : ''}">${t.devices_unassigned ? 'байршил оноох хэрэгтэй' : 'бүгд оноогдсон'}</span></div>
-        <div class="card kpi"><div class="label">Хэрэглэгч</div><div class="value">${fmt(t.users)}</div><span class="delta">${fmt(t.superadmins)} супер админ</span></div>
-        <div class="card kpi"><div class="label">API түлхүүр</div><div class="value">${fmt(t.api_keys)}</div><span class="delta">идэвхтэй</span></div>
-        <div class="card kpi"><div class="label">Ingest алдаа</div><div class="value">${fmt(t.ingest_errors_24h)}</div><span class="delta ${t.ingest_errors_24h ? 'down' : 'up'}">сүүлийн 24 цагт</span></div>
-        <div class="card kpi"><div class="label">Сүүлийн өгөгдөл</div><div class="value" style="font-size:20px">${ago(t.last_data_at)}</div><span class="delta">DB: ${bytes(t.db_bytes)}</span></div>
+        ${kpi({ label: 'Байгууллага', value: fmt(t.tenants), sub: fmt(t.locations) + ' байршил', ico: 'building', c: 1, accent: true })}
+        ${kpi({ label: 'Төхөөрөмж', value: `${fmt(t.devices_online)}<span class="muted" style="font-size:16px;font-weight:500">/${fmt(t.devices)}</span>`, sub: offline ? offline + ' offline' : t.devices ? 'бүгд online' : 'холбогдоогүй', subClass: offline ? 'down' : t.devices ? 'up' : '', ico: 'device', c: offline ? 8 : 3 })}
+        ${kpi({ label: 'Оноогоогүй төхөөрөмж', value: fmt(t.devices_unassigned), sub: t.devices_unassigned ? 'байршил оноох хэрэгтэй' : 'бүгд оноогдсон', subClass: t.devices_unassigned ? 'down' : '', ico: 'warn', c: t.devices_unassigned ? 4 : 3 })}
+        ${kpi({ label: 'Хэрэглэгч', value: fmt(t.users), sub: fmt(t.superadmins) + ' супер админ', ico: 'users', c: 7 })}
+        ${kpi({ label: 'API түлхүүр', value: fmt(t.api_keys), sub: 'идэвхтэй', ico: 'key', c: 5 })}
+        ${kpi({ label: 'Ingest алдаа', value: fmt(t.ingest_errors_24h), sub: 'сүүлийн 24 цагт', subClass: t.ingest_errors_24h ? 'down' : 'up', ico: 'alert', c: t.ingest_errors_24h ? 8 : 3 })}
+        ${kpi({ label: 'Сүүлийн өгөгдөл', value: `<span style="font-size:20px">${ago(t.last_data_at)}</span>`, sub: 'DB ' + bytes(t.db_bytes), ico: 'db', c: 2 })}
       </div>
       ${s.unassigned_devices.length ? `<div class="card section" style="border-color:var(--warn)"><div class="head"><h2>⚠ Оноогоогүй төхөөрөмж</h2><span class="sub">${s.unassigned_devices.length} ш — <a href="#devices">Төхөөрөмж хуудсанд</a> байршил оноож өгнө</span></div><div class="tbl-wrap"><table><thead><tr><th>Төлөв</th><th>SN</th><th>IP</th><th>Firmware</th><th>Анх холбогдсон</th><th>Сүүлийн heartbeat</th></tr></thead><tbody>
         ${s.unassigned_devices.map((d) => `<tr><td><span class="pill ${d.online ? 'on' : 'off'}"><i class="dot"></i>${d.online ? 'Online' : 'Offline'}</span></td><td class="mono">${esc(d.sn)}</td><td class="small">${esc(d.ip_address || '—')}</td><td class="small">${esc(d.sw_release || '—')}</td><td class="small muted">${fmtDT(d.first_seen)}</td><td>${ago(d.last_heartbeat)}</td></tr>`).join('')}</tbody></table></div></div>` : ''}
