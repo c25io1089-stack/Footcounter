@@ -258,6 +258,6 @@ async function dup(req, res) {
 router.post(['/api/camera/heartBeat', '/api/camera/heartbeat', '/heartBeat', '/heartbeat'], heartBeat);
 router.post(['/api/camera/dataUpload', '/api/camera/dataupload', '/dataUpload', '/dataupload'], dataUpload);
 router.post(['/api/camera/reid', '/reid'], reid);
-router.post(['/api/camera/dup', '/dup'], dup);
+router.post(['/api/camera/dup', '/dup', '/api/camera/dedupedAttributeCount', '/dedupedAttributeCount'], dup); // HX-CCD21-ийн анхдагч зам: dedupedAttributeCount
 
 module.exports = router;
