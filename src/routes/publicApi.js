@@ -27,7 +27,7 @@ router.get('/locations', wrap(async (req, res) => ok(res, await stats.listLocati
 router.get('/devices', wrap(async (req, res) => {
   const rows = await stats.listDevices(filters(req));
   // WiFi нууц үг зэрэг эмзэг талбарыг гадагш өгөхгүй
-  ok(res, rows.map(({ wifi_ssid, ...d }) => d));
+  ok(res, rows.map(({ wifi_ssid, last_upload, ...d }) => d));
 }));
 router.get('/flow/series', wrap(async (req, res) => ok(res, await stats.flowSeries(filters(req)), { granularity: filters(req).granularity })));
 router.get('/flow/totals', wrap(async (req, res) => ok(res, await stats.flowTotals(filters(req)))));

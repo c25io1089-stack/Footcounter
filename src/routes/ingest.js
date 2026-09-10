@@ -145,7 +145,9 @@ async function dataUpload(req, res) {
       }
     }
 
-    await client.query('UPDATE devices SET last_data_at=now() WHERE sn=$1', [sn]);
+    // Сүүлийн body-г (attributes-ийн эхний 5) хадгална — бодит форматыг dashboard-ын Лог цонхноос харна
+    const sample = { ...b, attributes: Array.isArray(b.attributes) ? b.attributes.slice(0, 5) : b.attributes, _attributes_total: Array.isArray(b.attributes) ? b.attributes.length : undefined, _received_at: new Date().toISOString() };
+    await client.query('UPDATE devices SET last_data_at=now(), last_upload=$2 WHERE sn=$1', [sn, JSON.stringify(sample).slice(0, 20000)]);
     await client.query('COMMIT');
     res.json({ code: 0, msg: 'Report submitted successfully', data: { sn, time: nowSec() } });
   } catch (e) {

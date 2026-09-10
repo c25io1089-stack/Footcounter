@@ -147,11 +147,17 @@ async function heatmap(f) {
   return r.rows;
 }
 
-// Нас, хүйс — хүн бүрийн үйл явдлаас (зөвхөн орсон, ажилтны картгүй)
+// Нас, хүйс — хүн бүрийн үйл явдлаас. Төхөөрөмж нас/хүйс/өндөр/байх хугацааг ихэвчлэн ГАРАХ (1) үйл явдалд хавсаргадаг,
+// орох (0) үйл явдалд заримдаа хоосон ирдэг тул хүн бүрийг (sn, id_index) нэг удаа — мэдээлэл илүүтэй мөрийг нь — тоолно.
 async function demographics(f) {
   const p = [];
-  const base = `FROM person_events pe JOIN devices d ON d.sn=pe.sn
-    WHERE pe.event_type=0 ${scope(f, p)} ${range(f, p, 'pe.ts')}`;
+  const base = `FROM (
+      SELECT DISTINCT ON (pe.sn, coalesce(pe.id_index, pe.id)) pe.*
+      FROM person_events pe JOIN devices d ON d.sn=pe.sn
+      WHERE pe.event_type IN (0,1) ${scope(f, p)} ${range(f, p, 'pe.ts')}
+      ORDER BY pe.sn, coalesce(pe.id_index, pe.id),
+        (CASE WHEN pe.gender IN (1,2) THEN 0 ELSE 1 END), (CASE WHEN pe.age_min IS NULL THEN 1 ELSE 0 END), pe.event_type DESC, pe.ts DESC
+    ) pe WHERE 1=1`;
   const gender = await query(`SELECT coalesce(pe.gender,0) AS gender, count(*)::int AS n ${base} AND coalesce(pe.workcard,0)=0 GROUP BY 1`, p);
   const age = await query(
     `SELECT CASE WHEN pe.age_min IS NULL THEN 'unknown'

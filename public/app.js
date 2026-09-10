@@ -474,7 +474,15 @@ Interface (анхдагч зөв бол хөндөхгүй):
       const del = e.target.closest('[data-del]');
       if (del && await confirmDlg(`${del.dataset.del} төхөөрөмжийг бүх өгөгдөл, heartbeat логтой нь хамт бүрмөсөн устгах уу? Төхөөрөмж дахин heartbeat илгээвэл хуваарилаагүй байдлаар дахин бүртгэгдэнэ.`, { danger: true })) { try { await api('/dash/devices/' + del.dataset.del, { method: 'DELETE' }); toast('Төхөөрөмж устгагдлаа'); await loadMeta(); fillLocationSelects(); render(); } catch (err) { toast(err.message, 'error'); } }
       if (e.target.id === 'claimBtn') claimModal();
-      if (hb) { const rows = await api('/dash/devices/' + hb.dataset.hb + '/heartbeats'); modal(`<h2>Heartbeat лог — ${esc(hb.dataset.hb)}</h2><div class="tbl-wrap" style="max-height:60vh;overflow:auto"><table><thead><tr><th>Цаг</th><th>IP</th><th>Холболт</th><th>Firmware</th></tr></thead><tbody>${rows.map((r) => `<tr><td>${fmtDT(r.ts)}</td><td>${esc(r.payload.ipAddress || '')}</td><td>${esc(r.payload.connectionType || '')}</td><td>${esc(r.payload.swRelease || '')}</td></tr>`).join('') || '<tr><td colspan="4" class="empty">Хоосон</td></tr>'}</tbody></table></div>`); }
+      if (hb) {
+        const dv = devs.find((x) => x.sn === hb.dataset.hb) || {};
+        const rows = await api('/dash/devices/' + hb.dataset.hb + '/heartbeats');
+        modal(`<h2>Лог — ${esc(dv.name || hb.dataset.hb)}</h2>
+          <h3 style="margin-bottom:6px">Сүүлийн dataUpload (төхөөрөмжөөс ирсэн бодит body)</h3>
+          ${dv.last_upload ? `<div class="code" style="max-height:32vh;overflow:auto;white-space:pre-wrap">${esc(JSON.stringify(dv.last_upload, null, 2))}</div>` : '<p class="muted small">Хараахан өгөгдөл ирээгүй</p>'}
+          <h3 style="margin:14px 0 6px">Heartbeat (сүүлийн 50)</h3>
+          <div class="tbl-wrap" style="max-height:32vh;overflow:auto"><table><thead><tr><th>Цаг</th><th>IP</th><th>Холболт</th><th>Firmware</th></tr></thead><tbody>${rows.map((r) => `<tr><td>${fmtDT(r.ts)}</td><td>${esc(r.payload.ipAddress || '')}</td><td>${esc(r.payload.connectionType || '')}</td><td>${esc(r.payload.swRelease || '')}</td></tr>`).join('') || '<tr><td colspan="4" class="empty">Хоосон</td></tr>'}</tbody></table></div>`);
+      }
     };
   }
   // superadmin: SN-ийг байгууллагад хуваарилна (байршил сонголтот); admin: өөрт хуваарилагдсан SN-ийг байршилд нь тавина
