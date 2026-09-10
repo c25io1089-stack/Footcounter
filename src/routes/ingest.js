@@ -63,9 +63,14 @@ async function heartBeat(req, res) {
   if (!sn) { await log(req.path, null, 1, 'sn байхгүй', b); return res.json({ code: 1, msg: 'sn does not exist' }); }
   try {
     const dev = await ensureDevice(sn, b);
-    const ts = toDate(b.timestamp) || new Date();
-    await query('UPDATE devices SET last_heartbeat=now() WHERE sn=$1', [sn]); // серверийн цагаар (төхөөрөмжийн цаг зөрж болно)
-    await query('INSERT INTO heartbeats(sn, ts, payload) VALUES($1,$2,$3)', [sn, ts, JSON.stringify(b)]);
+    // Цагийн зөрүү: heartbeat-ийн timestamp = төхөөрөмжийн «одоо». 10 минутаас их зөрвөл (ихэвчлэн орон нутгийн цагаа UTC мэт
+    // илгээсэн = яг +8ц) хадгалж, dataUpload/REID-ийн бүх цагийг энэ утгаар засна. Бага зөрүү (drift) тоохгүй.
+    const devTs = toDate(b.timestamp);
+    let skew = 0;
+    if (devTs) { skew = Math.round((Date.now() - devTs.getTime()) / 1000); if (Math.abs(skew) < 600) skew = 0; }
+    if (skew !== (dev.clock_skew_sec || 0)) console.log(`${sn}: цагийн зөрүү ${dev.clock_skew_sec || 0}с → ${skew}с (${(skew / 3600).toFixed(1)} цаг)`);
+    await query('UPDATE devices SET last_heartbeat=now(), clock_skew_sec=$2 WHERE sn=$1', [sn, skew]); // last_heartbeat серверийн цагаар
+    await query('INSERT INTO heartbeats(sn, ts, payload) VALUES($1,$2,$3)', [sn, devTs ? new Date(devTs.getTime() + skew * 1000) : new Date(), JSON.stringify(b)]);
 
     const data = {
       sn,
@@ -95,14 +100,16 @@ async function dataUpload(req, res) {
   if (!sn) { await log(req.path, null, 1, 'sn байхгүй', b); return res.json({ code: 1, msg: 'sn does not exist' }); }
   const client = await db.pool.connect();
   try {
-    await ensureDevice(sn, b);
+    const dev = await ensureDevice(sn, b);
+    const skewMs = (dev.clock_skew_sec || 0) * 1000;
+    const fix = (v) => { const d = toDate(v); return d ? new Date(d.getTime() + skewMs) : null; }; // төхөөрөмжийн цагийг зөрүүгээр засна
     await client.query('BEGIN');
 
     const isResidence = b.currentStay !== undefined || Array.isArray(b.info);
     const isFlow = b.in !== undefined || b.out !== undefined || b.startTime !== undefined;
 
     if (isResidence) {
-      const ts = toDate(b.time) || new Date();
+      const ts = fix(b.time) || new Date();
       await client.query(
         'INSERT INTO occupancy_snapshots(sn, ts, current_stay, info) VALUES($1,$2,$3,$4)',
         [sn, ts, Number(b.currentStay) || 0, JSON.stringify(b.info || [])]
@@ -110,9 +117,9 @@ async function dataUpload(req, res) {
     }
 
     if (isFlow) {
-      const ts = toDate(b.time) || new Date();
-      const start = toDate(b.startTime) || ts;
-      const end = toDate(b.endTime) || ts;
+      const ts = fix(b.time) || new Date();
+      const start = fix(b.startTime) || ts;
+      const end = fix(b.endTime) || ts;
       await client.query(
         `INSERT INTO flow_records(sn, ts, start_time, end_time, in_count, out_count, passby, turnback, avg_stay_ms, data_mode)
          VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
@@ -132,7 +139,7 @@ async function dataUpload(req, res) {
           `INSERT INTO person_events(sn, id_index, person_id, ts, event_type, stay_time_ms, height_cm, gender, age_min, age_max, workcard, wheelchair)
            VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
            ON CONFLICT (sn, id_index, ts, event_type) DO NOTHING`,
-          [sn, a.idIndex ?? null, a.personId ?? null, toDate(a.timeStamp) || ts, Number(a.eventType) || 0,
+          [sn, a.idIndex ?? null, a.personId ?? null, fix(a.timeStamp) || ts, Number(a.eventType) || 0,
             a.stayTime ?? null, a.height ?? null, a.gender ?? null, ageMin, ageMax, a.workcard ?? 0, a.wheelchair ?? 0]
         );
       }
@@ -158,7 +165,9 @@ async function reid(req, res) {
   if (!sn || !b.date) { await log(req.path, sn, 1, 'master_sn/date байхгүй', b); return res.json({ code: 1, msg: 'sn does not exist' }); }
   const client = await db.pool.connect();
   try {
-    await ensureDevice(sn);
+    const master = await ensureDevice(sn);
+    const skewMs = (master.clock_skew_sec || 0) * 1000;
+    const fix = (v) => { const d = toDate(v); return d ? new Date(d.getTime() + skewMs) : null; };
     for (const s of b.device_sns || []) if (s !== sn) await ensureDevice(s);
     const mix = await crossTenant([sn, ...(b.device_sns || [])]);
     if (mix) { await log(req.path, sn, 1, mix, b); return res.json({ code: 1, msg: 'device_sns belong to different tenants' }); }
@@ -177,8 +186,8 @@ async function reid(req, res) {
     for (const r of records) {
       const pairs = Array.isArray(r.pairs) ? r.pairs : [];
       const dwell = pairs.reduce((s, p) => s + (Number(p.dwell_time_ms) || 0), 0);
-      const enters = pairs.map((p) => toDate(p.enter && p.enter.timestamp_ms)).filter(Boolean);
-      const leaves = pairs.map((p) => toDate(p.leave && p.leave.timestamp_ms)).filter(Boolean);
+      const enters = pairs.map((p) => fix(p.enter && p.enter.timestamp_ms)).filter(Boolean);
+      const leaves = pairs.map((p) => fix(p.leave && p.leave.timestamp_ms)).filter(Boolean);
       const x = r.extra_info || {};
       await client.query(
         `INSERT INTO reid_persons(report_id, master_sn, report_date, global_id, visit_count, total_dwell_ms, first_enter, last_leave,
