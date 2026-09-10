@@ -5,17 +5,24 @@ const { query } = db;
 
 const router = express.Router();
 
-// Unix timestamp: секунд (10 орон) эсвэл миллисекунд (13 орон) → Date
+// Unix timestamp: секунд (10 орон), миллисекунд (13), микросекунд (16 — HX-CCD21-ийн attributes.timeStamp) → Date.
+// 2020 оноос өмнөх / 1 жилээс хойших утгыг хүчингүй гэж үзнэ (буруу нэгжээс хамгаална).
 function toDate(v) {
   if (v === undefined || v === null || v === '') return null;
   const n = Number(v);
-  if (!Number.isFinite(n)) return null;
-  return new Date(n > 1e12 ? n : n * 1000);
+  if (!Number.isFinite(n) || n <= 0) return null;
+  const ms = n > 1e14 ? n / 1000 : n > 1e11 ? n : n * 1000;
+  const d = new Date(ms);
+  if (d.getTime() < 1577836800000 || d.getTime() > Date.now() + 366 * 86400000) return null;
+  return d;
 }
+// Төхөөрөмжийн body-оос нууц талбарыг хасна (WiFi нууц үг г.м.)
+const SECRET_KEYS = ['wifiPassword', 'wifipassword', 'password', 'pwd'];
+function scrub(b) { if (!b || typeof b !== 'object') return b; const o = { ...b }; for (const k of SECRET_KEYS) delete o[k]; return o; }
 const nowSec = () => Math.floor(Date.now() / 1000);
 
 function safeJson(body) {
-  const s = JSON.stringify(body);
+  const s = JSON.stringify(scrub(body));
   return s.length > 200000 ? JSON.stringify({ truncated: true, length: s.length, head: s.slice(0, 2000) }) : s;
 }
 
@@ -70,7 +77,7 @@ async function heartBeat(req, res) {
     if (devTs) { skew = Math.round((Date.now() - devTs.getTime()) / 1000); if (Math.abs(skew) < 600) skew = 0; }
     if (skew !== (dev.clock_skew_sec || 0)) console.log(`${sn}: цагийн зөрүү ${dev.clock_skew_sec || 0}с → ${skew}с (${(skew / 3600).toFixed(1)} цаг)`);
     await query('UPDATE devices SET last_heartbeat=now(), clock_skew_sec=$2 WHERE sn=$1', [sn, skew]); // last_heartbeat серверийн цагаар
-    await query('INSERT INTO heartbeats(sn, ts, payload) VALUES($1,$2,$3)', [sn, devTs ? new Date(devTs.getTime() + skew * 1000) : new Date(), JSON.stringify(b)]);
+    await query('INSERT INTO heartbeats(sn, ts, payload) VALUES($1,$2,$3)', [sn, devTs ? new Date(devTs.getTime() + skew * 1000) : new Date(), JSON.stringify(scrub(b))]);
 
     const data = {
       sn,
@@ -146,7 +153,7 @@ async function dataUpload(req, res) {
     }
 
     // Сүүлийн body-г (attributes-ийн эхний 5) хадгална — бодит форматыг dashboard-ын Лог цонхноос харна
-    const sample = { ...b, attributes: Array.isArray(b.attributes) ? b.attributes.slice(0, 5) : b.attributes, _attributes_total: Array.isArray(b.attributes) ? b.attributes.length : undefined, _received_at: new Date().toISOString() };
+    const sample = { ...scrub(b), attributes: Array.isArray(b.attributes) ? b.attributes.slice(0, 5) : b.attributes, _attributes_total: Array.isArray(b.attributes) ? b.attributes.length : undefined, _received_at: new Date().toISOString() };
     await client.query('UPDATE devices SET last_data_at=now(), last_upload=$2 WHERE sn=$1', [sn, JSON.stringify(sample).slice(0, 20000)]);
     await client.query('COMMIT');
     res.json({ code: 0, msg: 'Report submitted successfully', data: { sn, time: nowSec() } });
