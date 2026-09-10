@@ -44,14 +44,20 @@ app.use('/api/v1', require('./routes/publicApi'));
 
 // Статик dashboard
 // app.js/app.css: ETag-аар revalidate (шинэ deploy шууд харагдана, хуучин кэшнээс болж «хуучин UI» гарахгүй); vendor: 7 хоног
+// Build ID: Railway-ийн commit SHA, үгүй бол асаасан цаг. index.html-д app.js?v=BUILD гэж орно — deploy бүрт URL шинэ тул
+// Cloudflare/browser-ийн кэш (CF js/css-д 4 цагийн max-age тулгадаг) хуучин хувилбар үлдээхгүй.
+const BUILD = (process.env.RAILWAY_GIT_COMMIT_SHA || process.env.SOURCE_VERSION || '').slice(0, 10) || String(Date.now());
+const INDEX_HTML = require('fs').readFileSync(path.join(__dirname, '..', 'public', 'index.html'), 'utf8').replace(/__BUILD__/g, BUILD);
 app.use(express.static(path.join(__dirname, '..', 'public'), {
   etag: true,
+  index: false,
   setHeaders(res, filePath) {
     if (/[\\/]vendor[\\/]/.test(filePath)) res.setHeader('Cache-Control', 'public, max-age=604800, immutable');
+    else if (/\.(js|css)$/.test(filePath)) res.setHeader('Cache-Control', 'public, max-age=31536000, immutable'); // URL-д хувилбар байгаа тул урт кэшлэж болно
     else res.setHeader('Cache-Control', 'no-cache');
   },
 }));
-app.get(['/', '/app', '/app/{*splat}'], (req, res) => { res.setHeader('Cache-Control', 'no-store'); res.sendFile(path.join(__dirname, '..', 'public', 'index.html')); });
+app.get(['/', '/index.html', '/app', '/app/{*splat}'], (req, res) => { res.setHeader('Cache-Control', 'no-store'); res.type('html').send(INDEX_HTML); });
 
 // Анхны superadmin үүсгэх (ADMIN_EMAIL / ADMIN_PASSWORD орчны хувьсагч)
 async function seedAdmin() {
