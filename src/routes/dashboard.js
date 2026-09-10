@@ -21,7 +21,11 @@ router.post('/auth/logout', (req, res) => { auth.clearSessionCookie(res); res.js
 router.get('/auth/me', auth.requireUser, async (req, res) => {
   let tenant = null;
   if (req.user.tid) tenant = (await query('SELECT id, name, slug FROM tenants WHERE id=$1', [req.user.tid])).rows[0];
-  res.json({ user: req.user, tenant });
+  // Төхөөрөмжийн Data Push-д бичих хаяг: HX-CCD21 HTTPS хийж чаддаггүй тул энгийн HTTP хаяг (Railway TCP proxy г.м.) env-ээр өгнө
+  const config = {
+    push_protocol: process.env.DEVICE_PUSH_PROTOCOL || null, push_host: process.env.DEVICE_PUSH_HOST || null, push_port: process.env.DEVICE_PUSH_PORT || null,
+  };
+  res.json({ user: req.user, tenant, config });
 });
 router.post('/auth/password', auth.requireUser, async (req, res) => {
   const { current, next } = req.body || {};

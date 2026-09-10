@@ -275,7 +275,7 @@
   async function boot() {
     try {
       const me = await api('/dash/auth/me');
-      state.user = me.user; state.tenant = me.tenant;
+      state.user = me.user; state.tenant = me.tenant; state.cfg = me.config || {};
     } catch { return renderLogin(); }
     NAV = state.user.role === 'superadmin' ? NAV_SUPER : NAV_TENANT;
     chartDefaults();
@@ -380,6 +380,15 @@
     drawSparks();
   }
   const shift = (iso, days) => new Date(new Date(iso).getTime() + days * 86400000).toISOString();
+  // Төхөөрөмжийн Data Push-д бичих хаяг: серверийн DEVICE_PUSH_* тохиргоо байвал түүнийг, үгүй бол одоогийн хаягийг
+  function pushCfg() {
+    const c = state.cfg || {};
+    const proto = (c.push_protocol || (location.protocol === 'https:' ? 'HTTPS' : 'HTTP')).toUpperCase();
+    const host = c.push_host || location.hostname;
+    const port = c.push_port || location.port || (proto === 'HTTPS' ? 443 : 80);
+    const origin = `${proto.toLowerCase()}://${host}${(proto === 'HTTPS' && String(port) === '443') || (proto === 'HTTP' && String(port) === '80') ? '' : ':' + port}`;
+    return { proto, host, port, origin };
+  }
   // Анхны тохиргооны алхмууд (төхөөрөмжгүй байгууллага)
   function renderOnboarding() {
     const isAdmin = ['superadmin', 'admin'].includes(state.user.role);
@@ -389,7 +398,7 @@
       <h2>Footfall-д тавтай морил 👋</h2><p class="muted">Тоо гарч эхлэхийн тулд 2 алхам үлдлээ. Төхөөрөмж эхний heartbeat илгээмэгц энэ дэлгэц өөрөө өгөгдөлтэй болно.</p>
       <div class="steps">
         ${step(1, hasLoc, 'Байршил үүсгэх', hasLoc ? `${state.locations.length} байршил бүртгэлтэй.` : 'Дэлгүүр/салбар бүр нэг байршил. Төхөөрөмжийг байршилд оноож өгнө.', isAdmin ? '<a class="btn primary sm" href="#settings/locations">Байршил нэмэх</a>' : '')}
-        ${step(2, false, 'HX-CCD21 төхөөрөмжийг холбох', `Төхөөрөмжийн удирдлагын хуудас → Settings → Data Push → HTTP: <b>${location.protocol === 'https:' ? 'HTTPS' : 'HTTP'}</b> · Сервер <b>${location.hostname}</b> · Порт <b>${location.port || (location.protocol === 'https:' ? 443 : 80)}</b>. Замууд анхдагчаараа зөв (<span class="mono">/api/camera/heartBeat</span> …).`, '<a class="btn sm" href="#devices">Дэлгэрэнгүй заавар</a>')}
+        ${step(2, false, 'HX-CCD21 төхөөрөмжийг холбох', `Төхөөрөмжийн удирдлагын хуудас → Settings → Data Push → HTTP → Add: Protocol <b>${pushCfg().proto}</b> · Server <b>${esc(pushCfg().host)}</b> · Port <b>${pushCfg().port}</b>. Замууд анхдагчаараа зөв (<span class="mono">/api/camera/heartBeat</span> …). Төхөөрөмж интернэттэй сүлжээнд (кабель эсвэл 2.4GHz WiFi) залгаастай байх ёстой.`, '<a class="btn sm" href="#devices">Дэлгэрэнгүй заавар</a>')}
         ${step(3, false, 'Төхөөрөмжид нэр, байршил оноох', 'Эхний heartbeat ирмэгц Төхөөрөмж хуудсанд «Оноогоогүй» гэж гарна → Засах.', '')}
       </div></div>`;
   }
@@ -444,11 +453,17 @@
       </tbody></table></div></div>
       <div class="card"><div class="head"><h2>Шинэ төхөөрөмж холбох</h2>${canEdit ? '<button class="btn primary" id="claimBtn">+ SN-ээр нэмэх</button>' : ''}</div>
         <details ${devs.length ? '' : 'open'}><summary>Төхөөрөмжийн тохиргооны заавар (Data Push)</summary>
-        <p class="muted small">HX-CCD21 удирдлагын хуудас → Settings → Data Push → HTTP → Add. Протокол: <b>${location.protocol === 'https:' ? 'HTTPS' : 'HTTP'}</b>, Сервер: <b>${location.hostname}</b>, Порт: <b>${location.port || (location.protocol === 'https:' ? 443 : 80)}</b>. Interface хэсэгт замуудыг доорх байдлаар тохируулна:</p>
-        <div class="code">Heartbeat:    ${location.origin}/api/camera/heartBeat
-Data upload:  ${location.origin}/api/camera/dataUpload
-REID:         ${location.origin}/api/camera/reid
-DUP:          ${location.origin}/api/camera/dup</div></details></div></div>`;
+        <p class="muted small">Төхөөрөмж интернэттэй сүлжээнд (кабель эсвэл <b>2.4GHz</b> WiFi) залгаастай байх ёстой — өөрийнх нь hotspot-оор биш. HX-CCD21 удирдлагын хуудас → Settings → Data Push → HTTP → Add:</p>
+        <div class="code">Protocol:       ${pushCfg().proto}
+Server Address: ${esc(pushCfg().host)}
+Server Port:    ${pushCfg().port}
+Data Mode:      Add (Increment)
+
+Interface (анхдагч зөв бол хөндөхгүй):
+  Heartbeat API: /api/camera/heartBeat
+  Data API:      /api/camera/dataUpload
+  REID:          /api/camera/reid
+  DUP:           /api/camera/dup</div></details></div></div>`;
     $('#page').onclick = async (e) => {
       const ed = e.target.closest('[data-edit]'); const rs = e.target.closest('[data-resync]'); const hb = e.target.closest('[data-hb]');
       if (ed) deviceModal(devs.find((d) => d.sn === ed.dataset.edit));
