@@ -91,7 +91,21 @@ router.get('/admin/summary', auth.requireRole('superadmin'), wrap(async (req, re
 
 // ---- Өгөгдөл (зөвхөн байгууллагын admin/viewer; superadmin байгууллагын өгөгдлийг харахгүй) ----
 const tenantData = auth.requireRole('admin', 'viewer');
-router.use(['/overview', '/flow', '/occupancy', '/demographics', '/events', '/reid', '/dedup'], tenantData);
+router.use(['/overview', '/live', '/flow', '/occupancy', '/demographics', '/events', '/reid', '/dedup'], tenantData);
+// Бодит цагийн самбар: одоо байгаа хүн, өнөөдрийн нийлбэр (from/to query), сүүлийн 60 минут минутаар, сүүлийн 1 цагийн хүн бүрийн үйл явдал, төхөөрөмжийн төлөв
+router.get('/live', wrap(async (req, res) => {
+  const f = filters(req);
+  const now = Date.now();
+  const hourAgo = new Date(now - 60 * 60000).toISOString();
+  const [occupancy, today, series, events, devices] = await Promise.all([
+    stats.currentOccupancy(f),
+    stats.flowTotals(f),
+    stats.flowSeries({ ...f, from: hourAgo, to: null, granularity: 'minute' }),
+    stats.personEvents({ ...f, from: hourAgo, to: null, limit: 40 }),
+    stats.listDevices(f),
+  ]);
+  res.json({ now: new Date(now).toISOString(), occupancy, today, series, events, devices: devices.map((d) => ({ sn: d.sn, name: d.name, online: d.online, last_heartbeat: d.last_heartbeat, last_data_at: d.last_data_at, location_name: d.location_name })) });
+}));
 router.get('/overview', wrap(async (req, res) => {
   const f = filters(req);
   const [totals, occupancy, byLocation, byDevice, series] = await Promise.all([

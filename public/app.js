@@ -208,6 +208,7 @@
   ];
   const NAV_TENANT = [
     ['overview', 'Тойм', 'M3 13h8V3H3v10zm10 8h8V11h-8v10zM3 21h8v-6H3v6zm10-18v6h8V3h-8z', 'Орсон, гарсан, одоо байгаа хүн, цагийн нягтрал'],
+    ['live', 'Бодит цаг', 'M3 12h4l3-8 4 16 3-8h4', 'Одоо дотор байгаа хүн, шууд урсгал — 5 сек тутам'],
     ['locations', 'Байршил', 'M12 2C8.1 2 5 5.1 5 9c0 5.3 7 13 7 13s7-7.7 7-13c0-3.9-3.1-7-7-7zm0 9.5a2.5 2.5 0 110-5 2.5 2.5 0 010 5z', 'Байршил бүрийн урсгал, орох хувь, төхөөрөмжийн төлөв'],
     ['devices', 'Төхөөрөмж', 'M4 6h16v10H4zM2 18h20v2H2z', 'Online/offline төлөв, холболт, firmware, тохиргоо'],
     ['demographics', 'Зочны портрет', 'M16 11c1.7 0 3-1.3 3-3s-1.3-3-3-3-3 1.3-3 3 1.3 3 3 3zm-8 0c1.7 0 3-1.3 3-3S9.7 5 8 5 5 6.3 5 8s1.3 3 3 3zm0 2c-2.3 0-7 1.2-7 3.5V19h14v-2.5C15 14.2 10.3 13 8 13zm8 0c-.3 0-.6 0-1 .1 1.2.8 2 2 2 3.4V19h6v-2.5c0-2.3-4.7-3.5-7-3.5z', 'Нас, хүйс, ажилтан, тэргэнцэр, давхардал арилгасан бүтэц'],
@@ -297,8 +298,10 @@
     const dataPage = state.page !== 'settings' && state.user.role !== 'superadmin';
     $('#globalFilters').style.display = dataPage ? '' : 'none';
     // Дэд гарчиг = одоогийн контекст (аль байршил/төхөөрөмж, ямар хугацаа) — хэрэглэгч санахгүй, харна
-    $('#pageSub').textContent = dataPage && state.page !== 'devices' ? contextLabel() : (nav[3] || '');
+    $('#pageSub').textContent = dataPage && !['devices', 'live'].includes(state.page) ? contextLabel() : (nav[3] || '');
     killCharts();
+    (state.liveTimers || []).forEach(clearInterval); state.liveTimers = [];
+    const rangeFld = $('.fld.range'); if (rangeFld) rangeFld.style.display = state.page === 'live' ? 'none' : '';
     $('#page').innerHTML = skeleton();
     const rb = $('#refreshBtn'); if (rb) rb.classList.add('loading');
     try {
@@ -749,7 +752,85 @@ POST ${O}/api/camera/dup          — өдрийн DUP (realtime + final) тай
     $('#page').onclick = (e) => { const c = e.target.closest('[data-claim]'); if (c) claimModal(c.dataset.claim); };
   }
 
-  const PAGES = { admin: pageAdmin, overview: pageOverview, locations: pageLocations, devices: pageDevices, demographics: pageDemographics, reid: pageReid, settings: pageSettings };
+  // ================= LIVE (бодит цаг) =================
+  const EV = { 0: ['Орсон', 'in'], 1: ['Гарсан', 'out'], 2: ['Өнгөрсөн', 'pass'], 3: ['Буцсан', 'back'] };
+  const setText = (id, v) => { const el = $('#' + id); if (el && el.innerHTML !== String(v)) el.innerHTML = v; };
+  // Огноог TZ-ийн 'YYYY-MM-DDTHH:MM' түлхүүр болгоно (серверийн минутын bucket-тэй тааруулахад)
+  function tzKey(d) {
+    const p = new Intl.DateTimeFormat('en-CA', { timeZone: TZ, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(d);
+    const g = (t) => (p.find((x) => x.type === t) || {}).value; return `${g('year')}-${g('month')}-${g('day')}T${g('hour')}:${g('minute')}`;
+  }
+  function toggleFs() { if (!document.fullscreenElement) document.documentElement.requestFullscreen().catch(() => toast('Бүтэн дэлгэц дэмжигдэхгүй', 'error')); else document.exitFullscreen(); }
+  document.addEventListener('fullscreenchange', () => document.body.classList.toggle('fs', !!document.fullscreenElement));
+  async function pageLive() {
+    const from = ubDate() + 'T00:00:00+08:00', to = ubDate(1) + 'T00:00:00+08:00';
+    const q = () => { const p = new URLSearchParams(); if (state.locationId) p.set('location_id', state.locationId); if (state.sn) p.set('sn', state.sn); p.set('from', from); p.set('to', to); p.set('tz', TZ); return '?' + p.toString(); };
+    const loc = state.locations.find((l) => String(l.id) === String(state.locationId)); const dev = state.devices.find((d) => d.sn === state.sn);
+    const ctx = [loc ? loc.name : (state.tenant ? state.tenant.name : 'Бүх байршил'), dev ? (dev.name || dev.sn) : null].filter(Boolean).join(' · ');
+    $('#page').innerHTML = `<div class="live">
+      <div class="live-top"><div class="live-ctx"><span class="pill on"><i class="dot"></i>LIVE</span> ${esc(ctx)}</div><div class="live-actions"><span class="live-clock" id="lvClock"></span><button class="btn" id="fsBtn" title="TV/монитор дээр тавихад">⛶ Бүтэн дэлгэц</button></div></div>
+      <div class="live-grid">
+        <div class="card live-hero"><div class="label">Одоо дотор байгаа</div><div class="big" id="lvOcc">—</div><div class="live-sub muted" id="lvOccSub"></div></div>
+        <div class="live-side">
+          <div class="card kpi"><div class="top"><div class="ico c1">${icon('in')}</div><div class="label">Өнөөдөр орсон</div></div><div class="value" id="lvIn">—</div><div class="bottom"><span class="delta" id="lvInSub"></span></div></div>
+          <div class="card kpi"><div class="top"><div class="ico c2">${icon('out')}</div><div class="label">Өнөөдөр гарсан</div></div><div class="value" id="lvOut">—</div><div class="bottom"><span class="delta" id="lvOutSub"></span></div></div>
+          <div class="card kpi"><div class="top"><div class="ico c4">${icon('pass')}</div><div class="label">Орох хувь</div></div><div class="value" id="lvRate">—</div><div class="bottom"><span class="delta" id="lvRateSub"></span></div></div>
+        </div>
+      </div>
+      <div class="grid g-2 section">
+        <div class="card"><div class="head"><h2>Сүүлийн 60 минут</h2><span class="sub" id="lvLastMin"></span></div><div class="chart-wrap sm"><canvas id="cLive"></canvas></div></div>
+        <div class="card"><div class="head"><h2>Шууд урсгал</h2><span class="sub">хүн бүрийн үйл явдал</span></div><div class="ticker" id="lvTicker"><div class="empty">Хүлээж байна…</div></div></div>
+      </div>
+      <div class="card section"><div class="head"><h2>Төхөөрөмж</h2><span class="sub" id="lvDevSub"></span></div><div class="live-devices" id="lvDevs"></div></div>
+    </div>`;
+    $('#fsBtn').onclick = toggleFs;
+    const seen = new Set(); let lastOcc = null;
+    const clock = () => setText('lvClock', new Date().toLocaleTimeString('mn-MN', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }));
+    async function tick() {
+      if (document.hidden || state.page !== 'live') return;
+      let d; try { d = await api('/dash/live' + q()); } catch (e) { setText('lvOccSub', 'Холболт тасарсан: ' + esc(e.message)); return; }
+      if (state.page !== 'live' || !$('#lvOcc')) return;
+      const t = d.today, occ = d.occupancy.total;
+      setText('lvOcc', fmt(occ));
+      if (lastOcc !== null && lastOcc !== occ) { const el = $('#lvOcc'); el.classList.remove('bump'); void el.offsetWidth; el.classList.add('bump'); } lastOcc = occ;
+      setText('lvOccSub', d.occupancy.devices.some((x) => x.from_snapshot) ? 'төхөөрөмжийн бодит тоолол' : 'өнөөдрийн орсон − гарсан');
+      setText('lvIn', fmt(t.in_count)); setText('lvOut', fmt(t.out_count)); setText('lvRate', pct(t.in_count, t.in_count + t.passby));
+      setText('lvInSub', fmt(t.turnback) + ' буцсан'); setText('lvOutSub', dur(t.avg_stay_ms) + ' дундаж байх'); setText('lvRateSub', fmt(t.passby) + ' өнгөрсөн (орохгүй)');
+      // 60 минут — хоосон минутуудыг 0-оор
+      const m = {}; d.series.forEach((s) => { m[String(s.bucket).replace(' ', 'T').slice(0, 16)] = s; });
+      const now = new Date(d.now); const labels = [], ins = [], outs = []; let last5 = 0;
+      for (let i = 59; i >= 0; i--) { const k = tzKey(new Date(now.getTime() - i * 60000)); const s = m[k]; labels.push(k.slice(11)); ins.push(s ? s.in_count : 0); outs.push(s ? s.out_count : 0); if (i < 5 && s) last5 += s.in_count; }
+      setText('lvLastMin', `сүүлийн 5 мин: ${fmt(last5)} орсон`);
+      if (charts.cLive) { const c = charts.cLive; c.data.labels = labels; c.data.datasets[0].data = ins; c.data.datasets[1].data = outs; c.update('none'); }
+      else mk('cLive', { type: 'bar', data: { labels, datasets: [{ label: 'Орсон', data: ins, backgroundColor: css('--s1') }, { label: 'Гарсан', data: outs, backgroundColor: css('--s2') }] },
+        options: { responsive: true, maintainAspectRatio: false, animation: false, interaction: { mode: 'index', intersect: false }, scales: { x: { stacked: false, grid: { display: false }, ticks: { maxTicksLimit: 7 } }, y: { beginAtZero: true, grid: { color: css('--border') }, border: { display: false }, ticks: { precision: 0 } } }, plugins: { legend: { position: 'top', align: 'end' } } } });
+      // Ticker — шинэ үйл явдлыг дээр нь нэмнэ
+      const tk = $('#lvTicker'); const evs = d.events.slice(0, 30);
+      if (!evs.length) tk.innerHTML = '<div class="empty">Сүүлийн 1 цагт үйл явдал ирээгүй</div>';
+      else {
+        if (tk.querySelector('.empty')) tk.innerHTML = '';
+        const fresh = evs.filter((e) => !seen.has(e.id)).reverse();
+        for (const e of fresh) {
+          seen.add(e.id);
+          const [name, cls] = EV[e.event_type] || ['?', ''];
+          const who = [e.gender === 1 ? 'Эр' : e.gender === 2 ? 'Эм' : null, e.age_min != null ? `${e.age_min}–${e.age_max}` : null, e.height_cm ? `${e.height_cm} см` : null, e.workcard ? 'ажилтан' : null, e.wheelchair ? 'тэргэнцэр' : null].filter(Boolean).join(' · ');
+          const row = document.createElement('div'); row.className = 'tk new';
+          row.innerHTML = `<span class="t">${new Date(e.ts).toLocaleTimeString('mn-MN', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })}</span><span class="ev ${cls}">${name}</span><span class="who">${esc(who || '—')}</span><span class="dev">${esc(e.device_name || e.sn)}</span>`;
+          tk.prepend(row);
+        }
+        while (tk.children.length > 30) tk.lastChild.remove();
+      }
+      // Төхөөрөмж
+      const on = d.devices.filter((x) => x.online).length;
+      setText('lvDevSub', `${on}/${d.devices.length} online`);
+      setText('lvDevs', d.devices.map((x) => `<span class="pill ${x.online ? 'on' : x.last_heartbeat ? 'off' : 'na'}" title="heartbeat ${ago(x.last_heartbeat)} · өгөгдөл ${ago(x.last_data_at)}"><i class="dot"></i>${esc(x.name || x.sn)}${x.location_name ? ' · ' + esc(x.location_name) : ''}</span>`).join('') || '<span class="muted">Төхөөрөмж байхгүй</span>');
+      const lu = $('#lastUpd'); if (lu) lu.textContent = 'Шинэчилсэн ' + new Date().toLocaleTimeString('mn-MN', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+    }
+    clock(); await tick();
+    state.liveTimers = [setInterval(tick, 5000), setInterval(clock, 1000)];
+  }
+
+  const PAGES = { admin: pageAdmin, overview: pageOverview, live: pageLive, locations: pageLocations, devices: pageDevices, demographics: pageDemographics, reid: pageReid, settings: pageSettings };
 
   // Бодит цагийн шинэчлэл: тойм хуудсыг 60 сек тутам
   setInterval(() => { if (state.user && (state.page === 'overview' || state.page === 'admin') && !document.hidden && !document.querySelector('.modal-bg')) render(); }, 60000);
