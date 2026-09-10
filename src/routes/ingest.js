@@ -49,6 +49,13 @@ async function ensureDevice(sn, body = {}) {
   return r.rows[0];
 }
 
+// REID/DUP тайлан олон SN нэгтгэдэг — өөр өөр байгууллагын SN холилдсон тайланг хүлээж авахгүй (өгөгдөл хольдохоос сэргийлнэ)
+async function crossTenant(sns) {
+  const r = await query('SELECT DISTINCT tenant_id FROM devices WHERE sn = ANY($1) AND tenant_id IS NOT NULL', [[...new Set(sns.filter(Boolean))]]);
+  if (r.rowCount > 1) return `device_sns өөр өөр байгууллагын SN агуулж байна (tenant ${r.rows.map((x) => x.tenant_id).join(', ')})`;
+  return null;
+}
+
 // ---------- 1. Heartbeat ----------
 async function heartBeat(req, res) {
   const b = req.body || {};
@@ -153,6 +160,8 @@ async function reid(req, res) {
   try {
     await ensureDevice(sn);
     for (const s of b.device_sns || []) if (s !== sn) await ensureDevice(s);
+    const mix = await crossTenant([sn, ...(b.device_sns || [])]);
+    if (mix) { await log(req.path, sn, 1, mix, b); return res.json({ code: 1, msg: 'device_sns belong to different tenants' }); }
     await client.query('BEGIN');
     const records = Array.isArray(b.reid_records) ? b.reid_records : [];
     const rep = await client.query(
@@ -201,6 +210,8 @@ async function dup(req, res) {
   try {
     await ensureDevice(sn);
     for (const s of b.device_sns || []) if (s !== sn) await ensureDevice(s);
+    const mix = await crossTenant([sn, ...(b.device_sns || [])]);
+    if (mix) { await log(req.path, sn, 1, mix, b); return res.json({ code: 1, msg: 'device_sns belong to different tenants' }); }
     const sum = b.dedup_summary || {};
     const stats = b.deduped_stats || {};
     const isFinal = Array.isArray(b.records);

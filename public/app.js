@@ -457,23 +457,33 @@ DUP:          ${location.origin}/api/camera/dup</div></details></div></div>`;
       if (hb) { const rows = await api('/dash/devices/' + hb.dataset.hb + '/heartbeats'); modal(`<h2>Heartbeat лог — ${esc(hb.dataset.hb)}</h2><div class="tbl-wrap" style="max-height:60vh;overflow:auto"><table><thead><tr><th>Цаг</th><th>IP</th><th>Холболт</th><th>Firmware</th></tr></thead><tbody>${rows.map((r) => `<tr><td>${fmtDT(r.ts)}</td><td>${esc(r.payload.ipAddress || '')}</td><td>${esc(r.payload.connectionType || '')}</td><td>${esc(r.payload.swRelease || '')}</td></tr>`).join('') || '<tr><td colspan="4" class="empty">Хоосон</td></tr>'}</tbody></table></div>`); }
     };
   }
-  function claimModal() {
+  // superadmin: SN-ийг байгууллагад хуваарилна (байршил сонголтот); admin: өөрт хуваарилагдсан SN-ийг байршилд нь тавина
+  function claimModal(presetSn = '') {
+    const isSuper = state.user.role === 'superadmin';
     const locs = state.locations.filter((l) => !state.tenantId || String(l.tenant_id) === String(state.tenantId));
-    modal(`<h2>Төхөөрөмж нэмэх</h2><p class="muted small">Төхөөрөмжийн арын наалт дээрх SN (жишээ: 201000002501090095)-ийг оруулна. Төхөөрөмж сервер рүү өгөгдөл илгээж эхлэхэд энэ байршилд автоматаар харагдана.</p>
-      <form class="form" id="f"><label>SN<input name="sn" required class="mono" placeholder="2010000025..."></label><label>Нэр<input name="name" placeholder="Гол хаалга"></label>
-      <label>Байршил<select name="location_id" required>${locs.map((l) => `<option value="${l.id}">${esc(l.tenant_name)} / ${esc(l.name)}</option>`).join('')}</select></label>
-      <div class="actions"><button type="button" class="btn" data-close>Болих</button><button class="btn primary">Нэмэх</button></div></form>`, (bg, close) => {
+    const locOpts = (tid) => `<option value="">— Дараа нь оноох —</option>` + locs.filter((l) => !tid || String(l.tenant_id) === String(tid)).map((l) => `<option value="${l.id}">${esc(l.name)}</option>`).join('');
+    const firstTid = state.tenantId || (state.tenants[0] || {}).id;
+    modal(`<h2>${isSuper ? 'Төхөөрөмж хуваарилах' : 'Төхөөрөмж нэмэх'}</h2>
+      <p class="muted small">${isSuper ? 'SN-ийг байгууллагад хуваарилна. Тэр байгууллагын админ дараа нь өөрөө байршилд нь тавьж болно. Төхөөрөмж хараахан холбогдоогүй байсан ч урьдчилан бүртгэж болно.' : 'Footfall-ийн superadmin танай байгууллагад хуваарилсан төхөөрөмжийн SN (арын наалт дээр, жишээ: 201000002501090095)-ийг оруулна.'}</p>
+      <form class="form" id="f"><label>SN<input name="sn" required class="mono" placeholder="2010000025..." value="${esc(presetSn)}" pattern="[A-Za-z0-9_-]{4,64}" title="Үсэг, тоо, зураас"></label><label>Нэр (сонголтот)<input name="name" placeholder="Гол хаалга"></label>
+      ${isSuper ? `<label>Байгууллага<select name="tenant_id" id="cTenant" required>${state.tenants.map((t) => `<option value="${t.id}" ${String(t.id) === String(firstTid) ? 'selected' : ''}>${esc(t.name)}</option>`).join('')}</select></label>
+      <label>Байршил (сонголтот)<select name="location_id" id="cLoc">${locOpts(firstTid)}</select></label>`
+      : `<label>Байршил<select name="location_id" required>${locs.map((l) => `<option value="${l.id}">${esc(l.name)}</option>`).join('') || '<option value="">Эхлээд байршил үүсгэнэ үү</option>'}</select></label>`}
+      <div class="actions"><button type="button" class="btn" data-close>Болих</button><button class="btn primary">${isSuper ? 'Хуваарилах' : 'Нэмэх'}</button></div></form>`, (bg, close) => {
       bg.querySelector('[data-close]').onclick = close;
-      bg.querySelector('#f').onsubmit = async (e) => { e.preventDefault(); try { await api('/dash/devices/claim', { method: 'POST', body: Object.fromEntries(new FormData(e.target)) }); toast('Төхөөрөмж нэмэгдлээ'); close(); await loadMeta(); fillLocationSelects(); render(); } catch (err) { toast(err.message, 'error'); } };
+      const ct = bg.querySelector('#cTenant'); if (ct) ct.onchange = () => { bg.querySelector('#cLoc').innerHTML = locOpts(ct.value); };
+      bg.querySelector('#f').onsubmit = async (e) => { e.preventDefault(); try { const d = await api('/dash/devices/claim', { method: 'POST', body: Object.fromEntries(new FormData(e.target)) }); toast(isSuper ? `${d.sn} хуваарилагдлаа` : 'Төхөөрөмж нэмэгдлээ'); close(); await loadMeta(); fillLocationSelects(); render(); } catch (err) { toast(err.message, 'error'); } };
     });
   }
   function deviceModal(d) {
     const isSuper = state.user.role === 'superadmin';
     const locs = state.locations.filter((l) => !isSuper || !state.tenantId || String(l.tenant_id) === String(state.tenantId));
+    const locOpts = (tid) => `<option value="">— Оноогоогүй —</option>` + locs.filter((l) => !tid || String(l.tenant_id) === String(tid)).map((l) => `<option value="${l.id}" ${l.id === d.location_id ? 'selected' : ''}>${esc(l.name)}</option>`).join('');
     modal(`<h2>Төхөөрөмж засах</h2><div class="muted mono small" style="margin-bottom:10px">${esc(d.sn)}</div>
       <form class="form" id="f">
         <label>Нэр (жишээ: Гол хаалга)<input name="name" value="${esc(d.name)}"></label>
-        <label>Байршил<select name="location_id"><option value="">— Оноогоогүй —</option>${locs.map((l) => `<option value="${l.id}" ${l.id === d.location_id ? 'selected' : ''}>${esc(l.tenant_name)} / ${esc(l.name)}</option>`).join('')}</select></label>
+        ${isSuper ? `<label>Байгууллага<select name="tenant_id" id="dTenant"><option value="">— Хуваарилаагүй —</option>${state.tenants.map((t) => `<option value="${t.id}" ${t.id === d.tenant_id ? 'selected' : ''}>${esc(t.name)}</option>`).join('')}</select></label>` : ''}
+        <label>Байршил<select name="location_id" id="dLoc">${locOpts(isSuper ? d.tenant_id : null)}</select></label>
         <div class="row">
           <label>Илгээх давтамж<select name="upload_interval">${[[0, 'Бодит цаг'], [1, '1 минут'], [5, '5 минут'], [60, '60 минут']].map(([v, t]) => `<option value="${v}" ${v === d.upload_interval ? 'selected' : ''}>${t}</option>`).join('')}</select></label>
           <label>Өгөгдлийн горим<select name="data_mode"><option value="Add" ${d.data_mode === 'Add' ? 'selected' : ''}>Add (нэмэгдэл)</option><option value="Total" ${d.data_mode === 'Total' ? 'selected' : ''}>Total (нийлбэр)</option></select></label>
@@ -483,6 +493,7 @@ DUP:          ${location.origin}/api/camera/dup</div></details></div></div>`;
         <div class="actions"><button type="button" class="btn" data-close>Болих</button><button class="btn primary">Хадгалах</button></div></form>`,
       (bg, close) => {
         bg.querySelector('[data-close]').onclick = close;
+        const dt = bg.querySelector('#dTenant'); if (dt) dt.onchange = () => { bg.querySelector('#dLoc').innerHTML = locOpts(dt.value); };
         bg.querySelector('#f').onsubmit = async (e) => { e.preventDefault(); const f = Object.fromEntries(new FormData(e.target)); try { await api('/dash/devices/' + d.sn, { method: 'PUT', body: f }); toast('Хадгалагдлаа'); close(); await loadMeta(); fillLocationSelects(); render(); } catch (err) { toast(err.message, 'error'); } };
       });
   }
@@ -705,8 +716,8 @@ POST ${O}/api/camera/dup          — өдрийн DUP (realtime + final) тай
         ${kpi({ label: 'Ingest алдаа', value: fmt(t.ingest_errors_24h), sub: 'сүүлийн 24 цагт', subClass: t.ingest_errors_24h ? 'down' : 'up', ico: 'alert', c: t.ingest_errors_24h ? 8 : 3 })}
         ${kpi({ label: 'Сүүлийн өгөгдөл', value: `<span style="font-size:20px">${ago(t.last_data_at)}</span>`, sub: 'DB ' + bytes(t.db_bytes), ico: 'db', c: 2 })}
       </div>
-      ${s.unassigned_devices.length ? `<div class="card section" style="border-color:var(--warn)"><div class="head"><h2>⚠ Оноогоогүй төхөөрөмж</h2><span class="sub">${s.unassigned_devices.length} ш — <a href="#devices">Төхөөрөмж хуудсанд</a> байршил оноож өгнө</span></div><div class="tbl-wrap"><table><thead><tr><th>Төлөв</th><th>SN</th><th>IP</th><th>Firmware</th><th>Анх холбогдсон</th><th>Сүүлийн heartbeat</th></tr></thead><tbody>
-        ${s.unassigned_devices.map((d) => `<tr><td><span class="pill ${d.online ? 'on' : 'off'}"><i class="dot"></i>${d.online ? 'Online' : 'Offline'}</span></td><td class="mono">${esc(d.sn)}</td><td class="small">${esc(d.ip_address || '—')}</td><td class="small">${esc(d.sw_release || '—')}</td><td class="small muted">${fmtDT(d.first_seen)}</td><td>${ago(d.last_heartbeat)}</td></tr>`).join('')}</tbody></table></div></div>` : ''}
+      ${s.unassigned_devices.length ? `<div class="card section" style="border-color:var(--warn)"><div class="head"><h2>⚠ Хуваарилаагүй төхөөрөмж</h2><span class="sub">${s.unassigned_devices.length} ш — байгууллагад хуваарилтал өгөгдөл нь хэнд ч харагдахгүй</span></div><div class="tbl-wrap"><table><thead><tr><th>Төлөв</th><th>SN</th><th>IP</th><th>Firmware</th><th>Анх холбогдсон</th><th>Сүүлийн heartbeat</th><th></th></tr></thead><tbody>
+        ${s.unassigned_devices.map((d) => `<tr><td><span class="pill ${d.online ? 'on' : 'off'}"><i class="dot"></i>${d.online ? 'Online' : 'Offline'}</span></td><td class="mono">${esc(d.sn)}</td><td class="small">${esc(d.ip_address || '—')}</td><td class="small">${esc(d.sw_release || '—')}</td><td class="small muted">${fmtDT(d.first_seen)}</td><td>${ago(d.last_heartbeat)}</td><td><button class="btn sm primary" data-claim="${esc(d.sn)}">Хуваарилах</button></td></tr>`).join('')}</tbody></table></div></div>` : ''}
       <div class="card section"><div class="head"><h2>Байгууллагууд</h2><span class="sub">${s.tenants.length} байгууллага · <a href="#settings/tenants">удирдах</a></span></div><div class="tbl-wrap"><table><thead><tr><th>Байгууллага</th><th>Админ</th><th class="num">Байршил</th><th>Төхөөрөмж</th><th class="num">Хэрэглэгч</th><th class="num">API</th><th>Сүүлийн өгөгдөл</th><th>Үүссэн</th></tr></thead><tbody>
         ${s.tenants.map((x) => `<tr>
           <td><b>${esc(x.name)}</b><br><span class="mono muted small">${esc(x.slug)}</span></td>
@@ -720,6 +731,7 @@ POST ${O}/api/camera/dup          — өдрийн DUP (realtime + final) тай
       </tbody></table></div></div>
       ${s.recent_errors.length ? `<div class="card section"><div class="head"><h2>Сүүлийн ingest алдаа</h2><span class="sub"><a href="#settings/log">бүгдийг харах</a></span></div><div class="tbl-wrap"><table><thead><tr><th>Цаг</th><th>Зам</th><th>SN</th><th>Код</th><th>Мессеж</th></tr></thead><tbody>
         ${s.recent_errors.map((r) => `<tr><td class="small">${fmtDT(r.created_at)}</td><td class="mono">${esc(r.path)}</td><td class="mono">${esc(r.sn || '')}</td><td>${r.status}</td><td>${esc(r.message || '')}</td></tr>`).join('')}</tbody></table></div></div>` : ''}`;
+    $('#page').onclick = (e) => { const c = e.target.closest('[data-claim]'); if (c) claimModal(c.dataset.claim); };
   }
 
   const PAGES = { admin: pageAdmin, overview: pageOverview, locations: pageLocations, devices: pageDevices, demographics: pageDemographics, reid: pageReid, settings: pageSettings };

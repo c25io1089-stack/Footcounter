@@ -220,8 +220,8 @@ router.put('/devices/:sn', auth.requireRole('superadmin', 'admin'), wrap(async (
   const sn = req.params.sn;
   const cur = (await query('SELECT * FROM devices WHERE sn=$1', [sn])).rows[0];
   if (!cur) return res.status(404).json({ error: 'Төхөөрөмж олдсонгүй' });
-  // admin зөвхөн өөрийн tenant-ийн эсвэл оноогдоогүй төхөөрөмжийг өөрчилнө
-  if (req.user.role !== 'superadmin' && cur.tenant_id && cur.tenant_id !== req.user.tid) return res.status(403).json({ error: 'Эрх хүрэлцэхгүй' });
+  // admin ЗӨВХӨН өөрийн байгууллагад хуваарилагдсан төхөөрөмжийг өөрчилнө (хуваарилаагүй SN-ийг superadmin л онооно)
+  if (req.user.role !== 'superadmin' && cur.tenant_id !== req.user.tid) return res.status(403).json({ error: 'Энэ төхөөрөмж танай байгууллагад хуваарилагдаагүй байна — superadmin-д хандана уу' });
   let tid = cur.tenant_id;
   if (req.user.role === 'superadmin' && tenant_id !== undefined) tid = tenant_id ? Number(tenant_id) : null;
   if (req.user.role !== 'superadmin') tid = req.user.tid;
@@ -229,6 +229,8 @@ router.put('/devices/:sn', auth.requireRole('superadmin', 'admin'), wrap(async (
   if (lid) {
     const loc = (await query('SELECT tenant_id FROM locations WHERE id=$1', [lid])).rows[0];
     if (!loc) return res.status(400).json({ error: 'Байршил олдсонгүй' });
+    if (req.user.role !== 'superadmin' && loc.tenant_id !== req.user.tid) return res.status(403).json({ error: 'Байршил өөр байгууллагынх байна' });
+    if (req.user.role === 'superadmin' && tid && tid !== loc.tenant_id) return res.status(400).json({ error: 'Байршил сонгосон байгууллагад хамаарахгүй байна' });
     tid = loc.tenant_id; // байршил онооход tenant автоматаар тохирно
   }
   const r = await query(
@@ -239,21 +241,31 @@ router.put('/devices/:sn', auth.requireRole('superadmin', 'admin'), wrap(async (
       timezone_offset != null ? Number(timezone_offset) : null]);
   res.json(r.rows[0]);
 }));
-// Оноогдоогүй төхөөрөмжийг SN-ээр өөрийн байгууллагад холбох (admin)
+// Төхөөрөмж хуваарилах / холбох.
+//  superadmin: SN-ийг байгууллагад ХУВААРИЛНА (tenant_id заавал; байршил сонголтот) — SN урьд нь ирээгүй байсан ч бүртгэнэ
+//  admin:      зөвхөн өөрт нь хуваарилагдсан SN-ийг байршилд нь тавина — хуваарилаагүй/өөр байгууллагын SN-ийг авч чадахгүй
 router.post('/devices/claim', auth.requireRole('superadmin', 'admin'), wrap(async (req, res) => {
-  const { sn, location_id, name } = req.body || {};
+  const { sn: rawSn, location_id, name, tenant_id } = req.body || {};
+  const sn = String(rawSn || '').trim();
   if (!sn) return res.status(400).json({ error: 'SN шаардлагатай' });
   const loc = location_id ? (await query('SELECT * FROM locations WHERE id=$1', [location_id])).rows[0] : null;
   if (location_id && !loc) return res.status(400).json({ error: 'Байршил олдсонгүй' });
-  const tid = loc ? loc.tenant_id : ownTenant(req);
-  if (!tid) return res.status(400).json({ error: 'Байршил сонгоно уу' });
-  if (req.user.role !== 'superadmin' && tid !== req.user.tid) return res.status(403).json({ error: 'Эрх хүрэлцэхгүй' });
-  const cur = (await query('SELECT * FROM devices WHERE sn=$1', [sn.trim()])).rows[0];
-  if (cur && cur.tenant_id && cur.tenant_id !== tid && req.user.role !== 'superadmin') return res.status(409).json({ error: 'Энэ SN өөр байгууллагад бүртгэлтэй байна' });
+  const cur = (await query('SELECT * FROM devices WHERE sn=$1', [sn])).rows[0];
+  let tid;
+  if (req.user.role === 'superadmin') {
+    tid = loc ? loc.tenant_id : (tenant_id ? Number(tenant_id) : null);
+    if (!tid) return res.status(400).json({ error: 'Байгууллага сонгоно уу' });
+    if (loc && tenant_id && Number(tenant_id) !== loc.tenant_id) return res.status(400).json({ error: 'Байршил сонгосон байгууллагад хамаарахгүй байна' });
+  } else {
+    tid = req.user.tid;
+    if (!cur || cur.tenant_id !== tid) return res.status(403).json({ error: 'Энэ SN танай байгууллагад хуваарилагдаагүй байна. Төхөөрөмжийг Footfall-ийн superadmin хуваарилсны дараа энд нэмнэ.' });
+    if (loc && loc.tenant_id !== tid) return res.status(403).json({ error: 'Байршил өөр байгууллагынх байна' });
+  }
   const r = await query(
     `INSERT INTO devices(sn, tenant_id, location_id, name) VALUES($1,$2,$3,$4)
-     ON CONFLICT (sn) DO UPDATE SET tenant_id=EXCLUDED.tenant_id, location_id=EXCLUDED.location_id, name=CASE WHEN EXCLUDED.name<>'' THEN EXCLUDED.name ELSE devices.name END
-     RETURNING *`, [sn.trim(), tid, loc ? loc.id : null, name || '']);
+     ON CONFLICT (sn) DO UPDATE SET tenant_id=EXCLUDED.tenant_id, location_id=COALESCE(EXCLUDED.location_id, CASE WHEN devices.tenant_id=EXCLUDED.tenant_id THEN devices.location_id END),
+       name=CASE WHEN EXCLUDED.name<>'' THEN EXCLUDED.name ELSE devices.name END
+     RETURNING *`, [sn, tid, loc ? loc.id : null, name || '']);
   res.json(r.rows[0]);
 }));
 
