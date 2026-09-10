@@ -508,12 +508,35 @@ Interface (анхдагч зөв бол хөндөхгүй):
         </div>
         <label>Цагийн бүс (GMT+)<input type="number" name="timezone_offset" value="${d.timezone_offset}"></label>
         <p class="small muted">Давтамж, горим, цагийн бүсийг дараагийн heartbeat-д төхөөрөмж рүү илгээнэ.</p>
-        <div class="actions"><button type="button" class="btn" data-close>Болих</button><button class="btn primary">Хадгалах</button></div></form>`,
+        <div class="actions"><button type="button" class="btn danger ghost" id="purgeBtn" style="margin-right:auto">Өгөгдөл цэвэрлэх…</button><button type="button" class="btn" data-close>Болих</button><button class="btn primary">Хадгалах</button></div></form>`,
       (bg, close) => {
         bg.querySelector('[data-close]').onclick = close;
+        bg.querySelector('#purgeBtn').onclick = () => { close(); purgeModal(d); };
         const dt = bg.querySelector('#dTenant'); if (dt) dt.onchange = () => { bg.querySelector('#dLoc').innerHTML = locOpts(dt.value); };
         bg.querySelector('#f').onsubmit = async (e) => { e.preventDefault(); const f = Object.fromEntries(new FormData(e.target)); try { await api('/dash/devices/' + d.sn, { method: 'PUT', body: f }); toast('Хадгалагдлаа'); close(); await loadMeta(); fillLocationSelects(); render(); } catch (err) { toast(err.message, 'error'); } };
       });
+  }
+  // Төхөөрөмжийн өгөгдөл цэвэрлэх (туршилтын өгөгдөл арилгах) — бүгд эсвэл хугацаагаар; SN-ийг бичүүлж баталгаажуулна
+  function purgeModal(d) {
+    modal(`<h2>Өгөгдөл цэвэрлэх — ${esc(d.name || d.sn)}</h2>
+      <p class="small">Энэ төхөөрөмжийн орсон/гарсан бичлэг, хүн бүрийн үйл явдал, occupancy, REID/DUP тайланг <b>бүрмөсөн устгана</b>. Төхөөрөмж, тохиргоо, heartbeat лог хэвээр үлдэнэ. Буцаах боломжгүй.</p>
+      <form class="form" id="f">
+        <label>Хүрээ<select name="scope" id="pScope"><option value="all">Бүх өгөгдөл</option><option value="range">Хугацаагаар</option></select></label>
+        <div class="row" id="pRange" hidden><label>Эхлэх<input type="date" name="from"></label><label>Дуусах (оролцохгүй)<input type="date" name="to"></label></div>
+        <label>Баталгаажуулахын тулд SN-ийг бич<input name="confirm" class="mono" placeholder="${esc(d.sn)}" autocomplete="off" required></label>
+        <div class="actions"><button type="button" class="btn" data-close>Болих</button><button class="btn danger" id="pGo" disabled>Устгах</button></div></form>`, (bg, close) => {
+      bg.querySelector('[data-close]').onclick = close;
+      const sc = bg.querySelector('#pScope'), rg = bg.querySelector('#pRange'), go = bg.querySelector('#pGo'), cf = bg.querySelector('[name=confirm]');
+      sc.onchange = () => { rg.hidden = sc.value !== 'range'; };
+      cf.oninput = () => { go.disabled = cf.value.trim() !== d.sn; };
+      bg.querySelector('#f').onsubmit = async (e) => {
+        e.preventDefault(); const f = Object.fromEntries(new FormData(e.target));
+        const body = f.scope === 'range' ? { from: f.from ? f.from + 'T00:00:00+08:00' : null, to: f.to ? f.to + 'T00:00:00+08:00' : null } : {};
+        if (f.scope === 'range' && !f.from && !f.to) return toast('Хугацаагаа сонгоно уу', 'error');
+        try { const r = await api('/dash/devices/' + d.sn + '/purge', { method: 'POST', body }); const n = r.deleted; toast(`Устгав: ${fmt(n.flow_records)} бичлэг, ${fmt(n.person_events)} үйл явдал, ${fmt(n.reid_reports + n.dedup_reports)} тайлан`, 'success', 6000); close(); await loadMeta(); render(); }
+        catch (err) { toast(err.message, 'error'); }
+      };
+    });
   }
   function resyncModal(sn) {
     modal(`<h2>Түүхэн өгөгдөл дахин татах</h2><p class="muted small">Төхөөрөмж сүүлийн 90 хоногийн өгөгдлийг өөр дээрээ хадгалдаг. Сонгосон хугацааны өгөгдлийг дараагийн heartbeat-д дахин илгээхийг хүснэ.</p>

@@ -1,6 +1,11 @@
 // Dashboard-ийн дотоод API (cookie нэвтрэлт)
 const express = require('express');
 const db = require('../lib/db');
+// Админы үйлдлийн тэмдэглэл (ingest_log-д, status 0 = мэдээлэл)
+async function log(path, sn, status, message, body) {
+  try { await db.query('INSERT INTO ingest_log(path, sn, status, message, body) VALUES($1,$2,$3,$4,$5)', [path, sn || null, status, message || null, body ? JSON.stringify(body) : null]); }
+  catch (e) { console.error('audit log', e.message); }
+}
 const { query } = db;
 const auth = require('../lib/auth');
 const stats = require('../lib/stats');
@@ -294,6 +299,33 @@ router.post('/devices/:sn/resync', auth.requireRole('superadmin', 'admin'), wrap
   if (!(await deviceInScope(req, req.params.sn))) return res.status(404).json({ error: 'Төхөөрөмж олдсонгүй' });
   await query('UPDATE devices SET resync_start=$2, resync_end=$3 WHERE sn=$1', [req.params.sn, from, to]);
   res.json({ ok: true, note: 'Дараагийн heartbeat-д төхөөрөмж рүү илгээнэ' });
+}));
+// Төхөөрөмжийн өгөгдлийг цэвэрлэх (туршилтын өгөгдөл арилгах): from/to өгвөл тэр хугацааных, үгүй бол бүгд.
+// Төхөөрөмж өөрөө, тохиргоо, heartbeat лог хэвээр үлдэнэ.
+router.post('/devices/:sn/purge', auth.requireRole('superadmin', 'admin'), wrap(async (req, res) => {
+  const sn = req.params.sn;
+  if (!(await deviceInScope(req, sn))) return res.status(404).json({ error: 'Төхөөрөмж олдсонгүй' });
+  const { from, to } = req.body || {};
+  const client = await db.pool.connect();
+  try {
+    await client.query('BEGIN');
+    const p = [sn]; let w = '';
+    if (from) { p.push(from); w += ` AND ts >= $${p.length}`; }
+    if (to) { p.push(to); w += ` AND ts < $${p.length}`; }
+    const out = {};
+    out.flow_records = (await client.query(`DELETE FROM flow_records WHERE sn=$1${w}`, p)).rowCount;
+    out.person_events = (await client.query(`DELETE FROM person_events WHERE sn=$1${w}`, p)).rowCount;
+    out.occupancy_snapshots = (await client.query(`DELETE FROM occupancy_snapshots WHERE sn=$1${w}`, p)).rowCount;
+    const pd = [sn]; let wd = '';
+    if (from) { pd.push(from.slice(0, 10)); wd += ` AND report_date >= $${pd.length}`; }
+    if (to) { pd.push(to.slice(0, 10)); wd += ` AND report_date < $${pd.length}`; }
+    out.reid_reports = (await client.query(`DELETE FROM reid_reports WHERE master_sn=$1${wd}`, pd)).rowCount;
+    out.dedup_reports = (await client.query(`DELETE FROM dedup_reports WHERE master_sn=$1${wd}`, pd)).rowCount;
+    if (!from && !to) await client.query('UPDATE devices SET last_data_at=NULL WHERE sn=$1', [sn]);
+    await client.query('COMMIT');
+    await log(`purge ${sn}`, sn, 0, `${req.user.email} устгав: ${JSON.stringify(out)} ${from || to ? `(${from || '…'} → ${to || '…'})` : '(бүгд)'}`, null);
+    res.json({ ok: true, deleted: out });
+  } catch (e) { await client.query('ROLLBACK').catch(() => {}); throw e; } finally { client.release(); }
 }));
 router.delete('/devices/:sn', auth.requireRole('superadmin'), wrap(async (req, res) => {
   await query('DELETE FROM devices WHERE sn=$1', [req.params.sn]);
