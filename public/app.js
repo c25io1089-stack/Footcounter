@@ -352,12 +352,13 @@
     $('#page').innerHTML = `
       ${offline ? `<div class="notice warn"><b>${offline} төхөөрөмж offline</b> — тоо дутуу байж болзошгүй. <a href="#devices">Төхөөрөмж хуудсанд шалгах →</a></div>` : ''}
       <div class="grid g-kpi hero">
-        ${kpi({ label: 'Орсон зочин', value: fmt(t.in_count), delta: { cur: t.in_count, prev: prev.in_count }, ico: 'in', c: 1, accent: true, spark: ov.series.map((s) => s.in_count) })}
-        ${kpi({ label: 'Одоо дотор байгаа', value: fmt(ov.occupancy.total), sub: 'бодит цагт', ico: 'people', c: 3 })}
-        ${kpi({ label: 'Орох хувь', value: pct(t.in_count, t.in_count + t.passby), delta: { cur: curRate, prev: prevRate }, ico: 'pass', c: 4, spark: ov.series.map((s) => (s.in_count + s.passby ? Math.round(100 * s.in_count / (s.in_count + s.passby)) : 0)) })}
-        ${kpi({ label: 'Дундаж байх хугацаа', value: dur(t.avg_stay_ms), sub: 'камерын талбайд', ico: 'clock', c: 7 })}
+        ${kpi({ label: 'Орсон', value: fmt(t.in_count), delta: { cur: t.in_count, prev: prev.in_count }, ico: 'in', c: 1, accent: true, spark: ov.series.map((s) => s.in_count) })}
+        ${kpi({ label: 'Гарсан', value: fmt(t.out_count), delta: { cur: t.out_count, prev: prev.out_count }, ico: 'out', c: 2, spark: ov.series.map((s) => s.out_count) })}
+        ${kpi({ label: 'Өнгөрсөн', value: fmt(t.passby), delta: { cur: t.passby, prev: prev.passby }, ico: 'pass', c: 4, spark: ov.series.map((s) => s.passby) })}
+        ${kpi({ label: 'Буцсан', value: fmt(t.turnback), delta: { cur: t.turnback, prev: prev.turnback }, ico: 'back', c: 5, spark: ov.series.map((s) => s.turnback) })}
+        ${kpi({ label: 'Байх', value: fmt(t.stay_count || 0), sub: `${Math.round((t.stay_threshold_ms || 5000) / 1000)} сек+ зогссон · дундаж ${dur(t.avg_stay_ms)}`, ico: 'clock', c: 7 })}
       </div>
-      <div class="stats"><span><b>${fmt(t.out_count)}</b> гарсан</span><span><b>${fmt(t.passby)}</b> өнгөрсөн (орохгүй)</span><span><b>${fmt(t.turnback)}</b> буцсан</span><span><b>${online}/${total}</b> төхөөрөмж online</span></div>
+      <div class="stats"><span><b>${fmt(ov.occupancy.total)}</b> одоо дотор байгаа</span><span><b>${pct(t.in_count, t.in_count + t.passby)}</b> орох хувь</span><span><b>${online}/${total}</b> төхөөрөмж online</span></div>
       <div class="grid g-2 section">
         <div class="card"><div class="head"><h2>Хүний урсгал</h2><span class="sub">${g === 'hour' ? 'цагаар' : g === 'day' ? 'өдрөөр' : '7 хоногоор'}</span></div><div class="chart-wrap"><canvas id="cFlow"></canvas></div></div>
         <div class="card"><div class="head"><h2>Байршлаар</h2><span class="sub">орсон хүн</span></div><div class="tbl-wrap"><table><thead><tr><th>Байршил</th><th class="num">Орсон</th><th class="num">Гарсан</th><th>Хувь</th></tr></thead><tbody>

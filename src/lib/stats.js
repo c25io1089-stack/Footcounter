@@ -74,8 +74,14 @@ async function flowTotals(f) {
        CASE WHEN sum(fr.in_count)>0 THEN (sum(fr.avg_stay_ms*fr.in_count)/sum(fr.in_count))::int ELSE 0 END AS avg_stay_ms
      FROM flow_records fr JOIN devices d ON d.sn=fr.sn
      WHERE fr.data_mode='Add' ${scope(f, p)} ${range(f, p, 'fr.ts')}`, p);
-  return r.rows[0];
+  // «Байх» (Stay): төхөөрөмжийн Stay шиг — тоолох бүсэд STAY_THRESHOLD_MS-ээс удаан зогссон хүний тоо (гарах үйл явдлын stayTime)
+  const p2 = [STAY_THRESHOLD_MS];
+  const s = await query(
+    `SELECT count(*)::int AS stay_count FROM person_events pe JOIN devices d ON d.sn=pe.sn
+     WHERE pe.event_type=1 AND pe.stay_time_ms >= $1 ${scope(f, p2)} ${range(f, p2, 'pe.ts')}`, p2);
+  return { ...r.rows[0], stay_count: s.rows[0].stay_count, stay_threshold_ms: STAY_THRESHOLD_MS };
 }
+const STAY_THRESHOLD_MS = Number(process.env.STAY_THRESHOLD_MS || 5000);
 
 // Байршил бүрээр нэгтгэл
 async function flowByLocation(f) {
