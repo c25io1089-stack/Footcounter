@@ -213,26 +213,34 @@ tbody tr { transition: background .1s; } tbody tr:hover td { background: var(--s
 tbody tr.live-row td { background: color-mix(in srgb, var(--good) 9%, var(--surface)); font-weight: 500; }
 tbody tr.live-row td:first-child { box-shadow: inset 3px 0 0 var(--good); }
 tbody tr.live-row .pill { padding: 1px 7px; font-size: 10.5px; }
-/* Багана бүрийн шүүлтүүр: гарчгийн хажууд icon, дарахад попап */
-th.fh > span { vertical-align: middle; }
-.fbtn { margin-left: 5px; vertical-align: middle; display: inline-flex; align-items: center; gap: 4px; height: 22px; padding: 0; width: 22px; justify-content: center; border: 0; border-radius: 7px; background: transparent; color: var(--muted); cursor: pointer; transition: background .12s, color .12s; }
-.fbtn svg { width: 13px; height: 13px; flex: none; }
-.fbtn:hover { background: var(--surface-2); color: var(--text); }
-.fbtn.on { width: auto; max-width: 128px; padding: 0 8px; background: var(--info-soft); color: var(--accent); }
-.fbtn.on i { font-style: normal; font-size: 11px; font-weight: 700; letter-spacing: 0; text-transform: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.fpop { position: fixed; z-index: 55; width: 230px; padding: 13px 14px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow-3); animation: pop .14s cubic-bezier(.2,.8,.3,1.1); }
-.fpop h4 { margin: 0 0 9px; font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
-.fpop label { display: grid; gap: 4px; margin-bottom: 9px; font-size: 11.5px; font-weight: 600; color: var(--text-2); }
-.fpop input, .fpop select { width: 100%; height: 34px; font-size: 13px; }
-.fpop.wide { width: 258px; }
-.fpop .fchk { display: grid; gap: 1px; max-height: 244px; overflow: auto; margin: 0 -5px; padding: 0 5px; }
-.fpop .fchk label { display: flex; align-items: center; gap: 9px; margin: 0; padding: 6px 7px; border-radius: 8px; font-size: 13px; font-weight: 500; color: var(--text); cursor: pointer; }
-.fpop .fchk label:hover { background: var(--surface-2); }
-.fpop .fchk input { width: 15px; height: 15px; flex: none; margin: 0; accent-color: var(--accent); cursor: pointer; }
-.fpop .fchk label span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.fpop .fchk label i { flex: none; font-style: normal; font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
-.fpop .fhint { margin: 7px 0 0; font-size: 11.5px; color: var(--muted); }
-.fpop .fpa { display: flex; gap: 8px; justify-content: space-between; margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--border); }
+/* ============ DataGrid (AG Grid) ============ */
+.grid-wrap { width: 100%; height: 620px; margin: 0 -4px; }
+.grid-wrap .ag-cell.g-strong { font-weight: 650; color: var(--text); }
+.grid-wrap .ag-cell.g-mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; color: var(--muted); }
+.grid-wrap .ag-row-hover { box-shadow: inset 2px 0 0 var(--accent); }
+.grid-wrap .ag-header-cell-text { text-transform: uppercase; letter-spacing: .05em; }
+.dt-range { display: inline-flex; align-items: center; gap: 6px; font-weight: 500; color: var(--text-2); }
+.dt-range input { height: 34px; font-size: 12.5px; }
+
+/* ComboFilter — оператор + хайлттай checkbox жагсаалт */
+.combo-filter { width: 252px; padding: 10px; font-size: 12px; color: var(--text); background: var(--surface); }
+.cf-label { display: flex; align-items: center; justify-content: space-between; min-height: 20px; margin-bottom: 5px; color: var(--muted); font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; }
+.cf-info { width: 20px; height: 20px; border: 0; border-radius: 4px; color: var(--muted); background: transparent; cursor: pointer; font-weight: 700; }
+.cf-info:hover { color: var(--accent); background: var(--surface-2); }
+.combo-filter select, .combo-filter input { width: 100%; height: 32px; padding: 0 8px; font-size: 12.5px; border-radius: 6px; }
+.cf-vals { display: grid; gap: 6px; margin-top: 6px; }
+.cf-vals:has(.cf-v2:not([hidden])) { grid-template-columns: 1fr 1fr; }
+.cf-hint { margin-top: 6px; padding: 7px 8px; border: 1px solid var(--border); border-radius: 6px; color: var(--muted); background: var(--surface-2); line-height: 1.45; }
+.cf-divider { height: 1px; margin: 10px 0 8px; background: var(--border); }
+.cf-search { margin-bottom: 6px; }
+.cf-list { max-height: 220px; overflow-y: auto; border: 1px solid var(--border); border-radius: 6px; }
+.cf-list label { display: flex; min-height: 30px; align-items: center; gap: 8px; padding: 5px 8px; border-bottom: 1px solid var(--border); cursor: pointer; }
+.cf-list label:last-child { border-bottom: 0; }
+.cf-list label:hover { background: var(--surface-2); }
+.cf-list input[type=checkbox] { width: 14px; height: 14px; flex: 0 0 14px; margin: 0; accent-color: var(--accent); }
+.cf-list label span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cf-all { position: sticky; top: 0; z-index: 1; font-weight: 650; background: var(--surface-2); }
+.cf-empty { padding: 18px 8px; color: var(--muted); text-align: center; }
 .tbl-wrap { overflow-x: auto; margin: 0 -20px; padding: 0 20px; }
 .tbl-wrap table { min-width: 0; }
 @media (max-width: 860px) { .tbl-wrap table { min-width: 520px; } }

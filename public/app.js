@@ -28,6 +28,7 @@
   const state = {
     user: null, tenant: null, tenants: [], locations: [], devices: [],
     tenantId: '', locationId: '', sn: '', range: '7d', from: '', to: '', page: 'overview',
+    grid: null,
   };
   const charts = {};
   const killCharts = () => { for (const k in charts) { charts[k].destroy(); delete charts[k]; } };
@@ -381,7 +382,8 @@
     $('#globalFilters').style.display = showFilters ? '' : 'none';
     // Дэд гарчиг = одоогийн контекст (аль байршил/төхөөрөмж, ямар хугацаа) — хэрэглэгч санахгүй, харна
     $('#pageSub').textContent = showFilters ? contextLabel() : (nav[3] || '');
-    killCharts(); closeFPop();
+    killCharts();
+    if (state.grid) { state.grid.destroy(); state.grid = null; }
     (state.liveTimers || []).forEach(clearInterval); state.liveTimers = [];
     $('#page').innerHTML = skeleton();
     const rb = $('#refreshBtn'); if (rb) rb.classList.add('loading');
@@ -828,7 +830,6 @@ POST ${O}/api/camera/dup          — өдрийн DUP (realtime + final) тай
   const curBucketKey = () => { const k = tzKey(new Date()); return k.slice(0, 14) + (+k.slice(14, 16) < 30 ? '00' : '30'); };
   const bKey = (b) => String(b).replace(' ', 'T').slice(0, 16);
   const bDate = (b) => { const s = bKey(b); return `${s.slice(8, 10)}.${s.slice(5, 7)}.${s.slice(0, 4)}`; };
-  const bTime = (b) => { const s = bKey(b); const h = +s.slice(11, 13), m = +s.slice(14, 16); const e = new Date(2000, 0, 1, h, m + 30); return `${s.slice(11, 16)}–${String(e.getHours()).padStart(2, '0')}:${String(e.getMinutes()).padStart(2, '0')}`; };
   const clockText = () => new Date().toLocaleTimeString('mn-MN', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
   // [талбарын нэр, шошго] — эрэмбэтэй; сүүлийнх нь «тодорхойгүй» тул шатлалд ордоггүй, саарал
   const A_BANDS = [['0_16', '0–16'], ['17_30', '17–30'], ['31_45', '31–45'], ['46_60', '46–60'], ['61p', '61+'], ['unknown', 'Тодорхойгүй']];
@@ -847,168 +848,245 @@ POST ${O}/api/camera/dup          — өдрийн DUP (realtime + final) тай
     c.update('none'); return true;
   }
 
-  // ================= ӨГӨГДӨЛ (30 минутын нэгтгэл) =================
-  // Шүүлтүүр багана бүрийн гарчгийн хажууд icon-оор. Дарахад боломжит хувилбаруудын
-  // жагсаалт гарч, check хийж олноор сонгоно (юу ч сонгоогүй = бүгд).
-  // Төхөөрөмж/Байршил/Огноо → сервер рүү дахин хүсэлт, бусад нь ачаалсан мөрүүд дээр шууд.
-  const D_COLS = [
-    { k: 'date', t: 'Огноо', fl: 1 }, { k: 'times', t: 'Цаг', fl: 1 },
-    { k: 'in', t: 'Орсон', num: 1 }, { k: 'out', t: 'Гарсан', num: 1 }, { k: 'back', t: 'Буцсан', num: 1 }, { k: 'pass', t: 'Өнгөрсөн', num: 1 },
-    { k: 'stay', t: 'Бүсэд байсан', num: 1, tip: 'Тоолох бүсэд байсан дундаж хугацаа — төхөөрөмжийн өөрийн хэмжсэн утга (дэлгүүрт байсан хугацаа биш)' },
-    { k: 'genders', t: 'Хүйс', fl: 1 }, { k: 'h', t: 'Өндөр', num: 1 }, { k: 'ages', t: 'Нас', fl: 1 },
-    { k: 'sns', t: 'Төхөөрөмж', fl: 1 }, { k: 'locs', t: 'Байршил', fl: 1 },
+  // ================= ӨГӨГДӨЛ — DataGrid (AG Grid Community) =================
+  // Хүснэгтийн UI нь AG Grid дээр. Багана бүр ComboFilter-тэй: оператор + хайлттай
+  // checkbox жагсаалт, хоёулаа AND-аар. Энэ нь Entry Accounting-ийн datagrid
+  // component-ын цэвэр JS руу хөрвүүлсэн хувилбар (тэнд React, энд build байхгүй).
+  // AG Grid-ийн бичвэрүүд монголоор
+  const AG_MN = {
+    page: 'Хуудас', to: '—', of: '/', next: 'Дараах', last: 'Сүүлийн', first: 'Эхний', previous: 'Өмнөх',
+    pageSizeSelectorLabel: 'Мөр:', ariaPageSizeSelectorLabel: 'Хуудсанд харуулах мөр',
+    loadingOoo: 'Ачаалж байна…', noRowsToShow: 'Мөр алга',
+    filterOoo: 'Шүүх…', applyFilter: 'Хэрэглэх', resetFilter: 'Цэвэрлэх', clearFilter: 'Арилгах', cancelFilter: 'Болих',
+    sortAscending: 'Өсөхөөр', sortDescending: 'Буурахаар', sortUnSort: 'Эрэмбэлэхгүй',
+    ariaFilterColumn: 'Багана шүүх', ariaSortableColumn: 'Эрэмбэлэхийн тулд Enter дарна',
+    ariaColumnFiltered: 'Шүүлттэй багана', ariaSearch: 'Хайх', ariaFilterValue: 'Шүүлтийн утга',
+    blanks: '(хоосон)', noMatches: 'Илэрц байхгүй', searchOoo: 'Хайх…', selectAll: '(Бүгд)',
+    rowGroupColumnsEmptyMessage: '', columns: 'Багана', thousandSeparator: ',', decimalSeparator: '.',
+  };
+
+  const BLANK_KEY = '(хоосон)';
+  const OPERATORS = [
+    ['contains', 'Агуулсан'], ['notContains', 'Агуулаагүй'], ['startsWith', 'Эхэлсэн'], ['endsWith', 'Төгссөн'],
+    ['wildcard', 'Хэв маяг (* ?)'], ['equals', 'Тэнцүү (=)'], ['notEqual', 'Тэнцүү биш (≠)'],
+    ['greaterThan', 'Их (>)'], ['lessThan', 'Бага (<)'], ['between', 'Хооронд'],
   ];
-  const D_SRV = ['sns', 'locs'];                       // сервер рүү дахин хүсэлт шаардах баганууд
-  const D_GEN = [['male', 'Эрэгтэй'], ['female', 'Эмэгтэй'], ['unknown', 'Тодорхойгүй']];
-  const D_AGE = [['child', '0–16'], ['young', '17–30'], ['adult', '31–45'], ['senior', '46+']];
-  const FICO = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5h18l-7 8.2V20l-4 2v-8.8z"/></svg>';
+  const asNum = (v) => { const t = String(v).replace(/[\s,]/g, ''); if (t === '') return null; const n = Number(t); return Number.isFinite(n) ? n : null; };
+  const wildcardRe = (p) => new RegExp('^' + p.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*').replace(/\?/g, '.') + '$', 'i');
+  const lc = (v) => String(v == null ? '' : v).toLocaleLowerCase('mn');
+  function passesOperator(cell, op, value, valueTo) {
+    if (!value) return true;
+    const cn = asNum(cell), vn = asNum(value), numeric = cn !== null && vn !== null;
+    const text = lc(cell), q = lc(value);
+    switch (op) {
+      case 'contains': return text.includes(q);
+      case 'notContains': return !text.includes(q);
+      case 'startsWith': return text.startsWith(q);
+      case 'endsWith': return text.endsWith(q);
+      case 'wildcard': return wildcardRe(value).test(String(cell == null ? '' : cell));
+      case 'equals': return numeric ? cn === vn : text === q;
+      case 'notEqual': return numeric ? cn !== vn : text !== q;
+      case 'greaterThan': return numeric ? cn > vn : text > q;
+      case 'lessThan': return numeric ? cn < vn : text < q;
+      case 'between': {
+        if (!valueTo) return true;
+        const tn = asNum(valueTo);
+        if (numeric && tn !== null) return cn >= Math.min(vn, tn) && cn <= Math.max(vn, tn);
+        const u = lc(valueTo), lo = q < u ? q : u, hi = q < u ? u : q;
+        return text >= lo && text <= hi;
+      }
+      default: return true;
+    }
+  }
+
+  // AG Grid-ийн custom filter component (IFilterComp)
+  class ComboFilter {
+    init(params) {
+      this.params = params;
+      this.model = null;
+      this.search = '';
+      this.draftOp = 'contains';
+      this.eGui = document.createElement('div');
+      this.eGui.className = 'combo-filter';
+      this.eGui.innerHTML = `
+        <div class="cf-label"><span>Оператор</span><button type="button" class="cf-info" aria-label="Шүүлтийн тайлбар">?</button></div>
+        <select class="cf-op">${OPERATORS.map(([v, t]) => `<option value="${v}">${esc(t)}</option>`).join('')}</select>
+        <div class="cf-vals"><input type="text" class="cf-v" placeholder="Утга"><input type="text" class="cf-v2" placeholder="Хүртэл" hidden></div>
+        <div class="cf-hint" hidden><b>*</b> нь олон, <b>?</b> нь нэг тэмдэгт орлоно. Тоо болон огноонд харьцуулах оператор ажиллана.</div>
+        <div class="cf-divider"></div>
+        <div class="cf-label"><span>Утгууд</span><span class="cf-count"></span></div>
+        <input type="search" class="cf-search" placeholder="Хайх...">
+        <div class="cf-list"></div>`;
+      this.elOp = this.eGui.querySelector('.cf-op');
+      this.elV = this.eGui.querySelector('.cf-v');
+      this.elV2 = this.eGui.querySelector('.cf-v2');
+      this.elSearch = this.eGui.querySelector('.cf-search');
+      this.elList = this.eGui.querySelector('.cf-list');
+      this.elCount = this.eGui.querySelector('.cf-count');
+      this.elHint = this.eGui.querySelector('.cf-hint');
+      this.elOp.onchange = () => { this.draftOp = this.elOp.value; this.elV2.hidden = this.elOp.value !== 'between'; this.update({ operator: this.elOp.value }); };
+      this.elV.oninput = () => this.update({ value: this.elV.value });
+      this.elV2.oninput = () => this.update({ valueTo: this.elV2.value });
+      this.elSearch.oninput = () => { this.search = this.elSearch.value; this.renderList(); };
+      this.eGui.querySelector('.cf-info').onclick = () => { this.elHint.hidden = !this.elHint.hidden; };
+      this.elList.onchange = (e) => {
+        const box = e.target.closest('input[type=checkbox]'); if (!box) return;
+        const next = new Set(this.selected());
+        if (box.dataset.all === '1') {
+          const vis = this.visible();
+          if (vis.every((x) => next.has(x))) vis.forEach((x) => next.delete(x)); else vis.forEach((x) => next.add(x));
+        } else if (box.checked) next.add(box.value); else next.delete(box.value);
+        const all = this.allValues();
+        const isAll = next.size === all.length;
+        this.update({ values: isAll ? null : [...next], known: isAll ? null : all });
+      };
+    }
+    // Багананд одоо байгаа бүх утга (харагдац хэлбэрээр), эрэмбэлсэн
+    allValues() {
+      const set = new Set();
+      this.params.api.forEachNode((node) => set.add(this.display(node)));
+      return [...set].sort((a, b) => a.localeCompare(b, 'mn', { numeric: true }));
+    }
+    raw(node) { return this.params.api.getCellValue({ rowNode: node, colKey: this.params.column.getColId() }); }
+    display(node) {
+      const v = this.raw(node);
+      if (v == null || v === '') return BLANK_KEY;
+      const f = this.params.colDef.valueFormatter;
+      if (typeof f === 'function') { try { const t = f({ value: v, node, data: node.data, colDef: this.params.colDef, column: this.params.column, api: this.params.api }); if (t != null && t !== '') return String(t); } catch { /* formatter-т нэмэлт param хэрэгтэй байж болно */ } }
+      return String(v);
+    }
+    selected() { return this.model && this.model.values ? this.model.values : this.allValues(); }
+    visible() { const q = lc(this.search.trim()); const all = this.allValues(); return q ? all.filter((x) => lc(x).includes(q)) : all; }
+    renderList() {
+      const sel = new Set(this.selected()), vis = this.visible(), all = this.allValues();
+      this.elCount.textContent = this.model && this.model.values ? `${sel.size}/${all.length}` : String(all.length);
+      const allOn = vis.length > 0 && vis.every((x) => sel.has(x));
+      this.elList.innerHTML = vis.length
+        ? `<label class="cf-all"><input type="checkbox" data-all="1"${allOn ? ' checked' : ''}><span>Бүгд</span></label>`
+          + vis.map((x) => `<label><input type="checkbox" value="${esc(x)}"${sel.has(x) ? ' checked' : ''}><span title="${esc(x)}">${esc(x)}</span></label>`).join('')
+        : '<div class="cf-empty">Илэрц байхгүй</div>';
+    }
+    update(patch) {
+      const m = Object.assign({ operator: this.draftOp, value: this.elV.value, valueTo: this.elV2.value, values: this.model ? this.model.values : null, known: this.model ? this.model.known : null }, patch);
+      this.model = (m.value !== '' || m.values !== null) ? m : null;
+      this.renderList();
+      this.params.filterChangedCallback();
+    }
+    isFilterActive() { return this.model != null; }
+    doesFilterPass(p) {
+      const m = this.model; if (!m) return true;
+      const shown = this.display(p.node);
+      // Шүүлт тавих үед БАЙГААГҮЙ утга = шинээр ирсэн мөр → нуухгүй
+      const bySel = !m.values || m.values.includes(shown) || (!!m.known && !m.known.includes(shown));
+      return bySel && passesOperator(this.raw(p.node), m.operator, m.value, m.valueTo);
+    }
+    getModel() { return this.model; }
+    setModel(m) {
+      this.model = m || null;
+      this.elOp.value = m && m.operator ? m.operator : 'contains';
+      this.elV.value = m && m.value ? m.value : '';
+      this.elV2.value = m && m.valueTo ? m.valueTo : '';
+      this.elV2.hidden = this.elOp.value !== 'between';
+      this.renderList();
+    }
+    afterGuiAttached() { this.search = ''; this.elSearch.value = ''; this.renderList(); setTimeout(() => this.elSearch.focus(), 0); }
+    getGui() { return this.eGui; }
+    destroy() { this.eGui = null; }
+  }
+
+  let gridReady = false;
+  function gridTheme() {
+    if (!gridReady) { agGrid.ModuleRegistry.registerModules([agGrid.AllCommunityModule]); gridReady = true; }
+    return agGrid.themeQuartz.withParams({
+      accentColor: css('--accent'), backgroundColor: css('--surface'), foregroundColor: css('--text'),
+      borderColor: css('--border'), chromeBackgroundColor: css('--surface-2'),
+      headerBackgroundColor: css('--surface'), headerTextColor: css('--muted'),
+      headerFontSize: 11, headerFontWeight: 700, headerVerticalPaddingScale: 0.9,
+      rowHoverColor: css('--surface-2'), oddRowBackgroundColor: css('--surface'),
+      fontFamily: getComputedStyle(document.body).fontFamily, fontSize: 13,
+      rowHeight: 42, headerHeight: 40, cellHorizontalPadding: 12,
+      wrapperBorder: false, wrapperBorderRadius: 0, borderRadius: 8,
+    });
+  }
+
   const D_LIM = 2000;                                 // сервер эхлээд хамгийн сүүлийн N мөрийг өгнө
-  const dFresh = () => ({ from: ubDate(-6), to: ubDate(0), sns: [], locs: [], times: [], genders: [], ages: [] });
+  const dFresh = () => ({ from: ubDate(-6), to: ubDate(0) });
   // '14:30' → '14:30–15:00'
   const tLabel = (v) => { const e = new Date(2000, 0, 1, +v.slice(0, 2), +v.slice(3, 5) + 30); return `${v}–${String(e.getHours()).padStart(2, '0')}:${String(e.getMinutes()).padStart(2, '0')}`; };
-  const closeFPop = () => document.querySelectorAll('.fpop').forEach((x) => x.remove());
-  // Гадуур дарах / ESC → попап хаана (нэг удаа бүртгэнэ)
-  document.addEventListener('click', (e) => { if (!e.target.closest('.fpop')) closeFPop(); });
-  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeFPop(); });
+
   async function pageData() {
     const f = state.dataF || (state.dataF = dFresh());
-    const def = dFresh();
-    const mine = (arr) => arr.filter((x) => !state.tenantId || String(x.tenant_id) === String(state.tenantId));
-    const devList = () => mine(state.devices).filter((d) => !f.locs.length || f.locs.includes(String(d.location_id)));
-    const dm = (v) => v.slice(8, 10) + '.' + v.slice(5, 7);
-    const devName = (sn) => { const d = state.devices.find((x) => x.sn === sn); return d ? (d.name || d.sn) : sn; };
-    const locName = (id) => { const l = state.locations.find((x) => String(x.id) === String(id)); return l ? l.name : id; };
-    // Товч дээр харагдах богино утга ('' бол шүүлтгүй)
-    const many = (a, one, w) => (!a.length ? '' : a.length === 1 ? one(a[0]) : `${a.length} ${w}`);
-    const vLabel = (k) => {
-      if (k === 'date') return (f.from !== def.from || f.to !== def.to) ? `${dm(f.from)}–${dm(f.to)}` : '';
-      if (k === 'sns') return many(f.sns, devName, 'төхөөрөмж');
-      if (k === 'locs') return many(f.locs, locName, 'байршил');
-      if (k === 'times') return many(f.times, tLabel, 'үе');
-      if (k === 'genders') return many(f.genders, (v) => (D_GEN.find((x) => x[0] === v) || [])[1], 'сонголт');
-      return many(f.ages, (v) => (D_AGE.find((x) => x[0] === v) || [])[1], 'бүлэг');
-    };
-    const btnHtml = (k) => { const v = vLabel(k); return `${FICO}${v ? `<i>${esc(v)}</i>` : ''}`; };
-    const th = (c) => `<th class="${c.num ? 'num ' : ''}fh"${c.tip ? ` title="${esc(c.tip)}"` : ''}><span>${c.t}</span>${c.fl ? `<button type="button" class="fbtn${vLabel(c.k) ? ' on' : ''}" data-col="${c.k}" title="${c.t} шүүх" aria-label="${c.t} шүүх">${btnHtml(c.k)}</button>` : ''}</th>`;
-    const dirty = () => D_COLS.some((c) => c.fl && vLabel(c.k));
     $('#page').innerHTML = `
-      <div class="live-top"><div class="live-ctx"><span class="pill on"><i class="dot"></i>LIVE</span> <span id="dtCtx"></span></div>
-        <div class="live-actions"><span class="live-clock" id="dtClock"></span><button class="btn" id="dtClr" hidden>Шүүлтүүр цэвэрлэх</button><button class="btn" id="dtCsv">⤓ CSV татах</button></div></div>
+      <div class="live-top"><div class="live-ctx"><span class="pill on"><i class="dot"></i>LIVE</span>
+          <label class="dt-range">Огноо <input type="date" id="dtFrom" value="${f.from}"> – <input type="date" id="dtTo" value="${f.to}"></label></div>
+        <div class="live-actions"><span class="live-clock" id="dtClock"></span>
+          <button class="btn" id="dtClr">Шүүлтүүр цэвэрлэх</button><button class="btn" id="dtCsv">⤓ CSV татах</button></div></div>
       <div class="card section"><div class="head"><h2>30 минутын нэгтгэл</h2><span class="sub" id="dtCount"></span></div>
-        <div class="tbl-wrap" id="dtWrap" style="max-height:66vh;overflow:auto">
-          <table><thead id="dtHead"><tr>${D_COLS.map(th).join('')}</tr></thead>
-          <tbody id="dtBody"><tr><td colspan="12" class="empty">Ачаалж байна…</td></tr></tbody></table></div></div>`;
-    let rows = [], view = [], lastHtml = '';
+        <div class="grid-wrap" id="dtGrid"></div></div>`;
+    const numCol = { type: 'numericColumn', width: 110, valueFormatter: (p) => (p.value == null ? '' : fmt(p.value)) };
+    const cols = [
+      { field: 'bucket', headerName: 'Огноо', width: 128, valueFormatter: (p) => bDate(p.value), sort: 'desc' },
+      { colId: 'time', headerName: 'Цаг', width: 136, valueGetter: (p) => bKey(p.data.bucket).slice(11, 16), valueFormatter: (p) => tLabel(p.value) },
+      { field: 'in_count', headerName: 'Орсон', ...numCol, cellClass: 'g-strong' },
+      { field: 'out_count', headerName: 'Гарсан', ...numCol },
+      { field: 'turnback', headerName: 'Буцсан', ...numCol },
+      { field: 'passby', headerName: 'Өнгөрсөн', ...numCol },
+      { field: 'avg_stay_ms', headerName: 'Бүсэд байсан', ...numCol, width: 130, valueFormatter: (p) => dur(p.value),
+        headerTooltip: 'Тоолох бүсэд байсан дундаж хугацаа — төхөөрөмжийн хэмжсэн (дэлгүүрт байсан хугацаа биш)' },
+      { field: 'male', headerName: 'Эр', ...numCol, width: 86 },
+      { field: 'female', headerName: 'Эм', ...numCol, width: 86 },
+      { field: 'gender_unknown', headerName: 'Хүйс тодорхойгүй', ...numCol, width: 140 },
+      { field: 'avg_height_cm', headerName: 'Өндөр (см)', ...numCol, width: 116 },
+      { colId: 'age', headerName: 'Нас', width: 100, valueGetter: (p) => (p.data.age_min == null ? null : `${p.data.age_min}–${p.data.age_max}`) },
+      { colId: 'device', headerName: 'Төхөөрөмж', width: 170, valueGetter: (p) => p.data.device_name || p.data.sn },
+      { field: 'sn', headerName: 'SN', width: 170, cellClass: 'g-mono' },
+      { field: 'location_name', headerName: 'Байршил', width: 150 },
+    ];
+    const gridApi = agGrid.createGrid($('#dtGrid'), {
+      theme: gridTheme(),
+      columnDefs: cols,
+      defaultColDef: { resizable: true, sortable: true, filter: ComboFilter, suppressHeaderFilterButton: false, suppressMovable: true, minWidth: 86 },
+      rowData: [],
+      animateRows: false,
+      columnHoverHighlight: true,
+      suppressDragLeaveHidesColumns: true,
+      enableCellTextSelection: true,
+      pagination: true,
+      paginationPageSize: 100,
+      paginationPageSizeSelector: [50, 100, 200, 500],
+      localeText: AG_MN,
+      getRowId: (p) => p.data.bucket + '|' + p.data.sn,
+      onFilterChanged: () => count(),
+      overlayNoRowsTemplate: '<span class="muted">Энэ хугацаанд өгөгдөл алга. Огнооны мужаа өргөтгөж үзнэ үү.</span>',
+    });
+    state.grid = gridApi;
+    let rows = [];
     const q = () => {
       const p = new URLSearchParams();
       if (state.tenantId) p.set('tenant_id', state.tenantId);
-      if (f.locs.length) p.set('location_id', f.locs.join(','));
-      if (f.sns.length) p.set('sn', f.sns.join(','));
       p.set('from', f.from + 'T00:00:00+08:00'); p.set('to', f.to + 'T23:59:59+08:00'); p.set('tz', TZ); p.set('limit', D_LIM);
       return '?' + p.toString();
     };
-    const gVal = (r, g) => (g === 'male' ? r.male : g === 'female' ? r.female : r.gender_unknown) || 0;
-    const keep = (r) => (!f.times.length || f.times.includes(bKey(r.bucket).slice(11, 16)))
-      && (!f.genders.length || f.genders.some((g) => gVal(r, g) > 0))
-      && (!f.ages.length || f.ages.some((a) => (r['age_' + a] || 0) > 0));
-    function ctx() {
-      setText('dtCtx', esc([f.locs.length ? many(f.locs, locName, 'байршил') : 'Бүх байршил', f.sns.length ? many(f.sns, devName, 'төхөөрөмж') : null, `${dm(f.from)}–${dm(f.to)}`].filter(Boolean).join(' · ')));
-    }
-    function syncBtn(k) {
-      const b = $(`.fbtn[data-col="${k}"]`); if (!b) return;
-      b.classList.toggle('on', !!vLabel(k)); b.innerHTML = btnHtml(k);
-    }
-    function paint() {
-      view = rows.filter(keep);
-      const cur = curBucketKey();
-      setText('dtCount', `${fmt(view.length)}${view.length !== rows.length ? ' / ' + fmt(rows.length) : ''} мөр${rows.length >= D_LIM ? ` · хамгийн сүүлийн ${fmt(D_LIM)}-аар хязгаарласан` : ''} · шинэчилсэн ${clockText()}`);
-      const clr = $('#dtClr'); if (clr) clr.hidden = !dirty();
-      const html = view.map((r) => {
-        const k = bKey(r.bucket), live = k === cur;
-        const g = (r.male || r.female || r.gender_unknown)
-          ? [r.male ? `Эр ${r.male}` : '', r.female ? `Эм ${r.female}` : '', r.gender_unknown ? `? ${r.gender_unknown}` : ''].filter(Boolean).join(' · ') : '—';
-        return `<tr class="${live ? 'live-row' : ''}">
-          <td class="small">${bDate(r.bucket)}</td><td class="mono">${bTime(r.bucket)}${live ? ' <span class="pill on"><i class="dot"></i>одоо</span>' : ''}</td>
-          <td class="num"><b>${fmt(r.in_count)}</b></td><td class="num">${fmt(r.out_count)}</td><td class="num">${fmt(r.turnback)}</td><td class="num">${fmt(r.passby)}</td>
-          <td class="num">${dur(r.avg_stay_ms)}</td>
-          <td class="small">${g}</td><td class="num">${r.avg_height_cm ? r.avg_height_cm : '—'}</td><td class="small">${r.age_min != null ? `${r.age_min}–${r.age_max}` : '—'}</td>
-          <td class="small">${esc(r.device_name || '(нэргүй)')}<br><span class="mono muted">${esc(r.sn)}</span></td><td class="small">${esc(r.location_name || '—')}</td></tr>`;
-      }).join('') || `<tr><td colspan="12" class="empty">${rows.length ? 'Шүүлтүүрт тохирох мөр алга — гарчиг дээрх сонголтоо цэвэрлэнэ үү.' : 'Энэ хугацаанд өгөгдөл алга. Огнооны шүүлтүүрийг өргөтгөж үзнэ үү.'}</td></tr>`;
-      if (html !== lastHtml) { const w = $('#dtWrap'), top = w.scrollTop; $('#dtBody').innerHTML = html; w.scrollTop = top; lastHtml = html; }
-    }
+    const count = () => {
+      const shown = gridApi.getDisplayedRowCount();
+      setText('dtCount', `${fmt(shown)}${shown !== rows.length ? ' / ' + fmt(rows.length) : ''} мөр${rows.length >= D_LIM ? ` · хамгийн сүүлийн ${fmt(D_LIM)}-аар хязгаарласан` : ''} · шинэчилсэн ${clockText()}`);
+    };
     async function tick(force) {
       if (!force && (document.hidden || state.page !== 'data')) return;
       let d; try { d = await api('/dash/data' + q()); } catch (e) { setText('dtCount', 'Алдаа: ' + esc(e.message)); return; }
-      if (state.page !== 'data' || !$('#dtBody')) return;
-      rows = d.rows; paint();
+      if (state.page !== 'data' || !state.grid) return;
+      rows = d.rows; gridApi.setGridOption('rowData', rows); count();
     }
-    // ---- Баганын шүүлтүүрийн попап: боломжит хувилбарууд + checkbox ----
-    // [утга, нэр, тоо] гурвалуудаас checkbox жагсаалт. Юу ч сонгоогүй = бүгд.
-    const chkList = (k, opts) => `<div class="fchk">${opts.map(([v, t, n]) => `<label><input type="checkbox" data-m="${k}" value="${esc(v)}"${f[k].includes(String(v)) ? ' checked' : ''}><span>${esc(t)}</span>${n == null ? '' : `<i>${fmt(n)}</i>`}</label>`).join('') || '<p class="fhint">Боломжит сонголт алга</p>'}</div>`;
-    const nRows = (fn) => rows.reduce((a, r) => a + (fn(r) ? 1 : 0), 0);
-    function popHtml(k) {
-      if (k === 'date') return `<h4>Огноо</h4><label>Эхлэх<input type="date" data-f="from" value="${f.from}"></label><label>Дуусах<input type="date" data-f="to" value="${f.to}"></label>`;
-      if (k === 'times') {
-        const seen = [...new Set(rows.map((r) => bKey(r.bucket).slice(11, 16)))].sort();
-        return `<h4>Цаг</h4>` + chkList(k, seen.map((v) => [v, tLabel(v), nRows((r) => bKey(r.bucket).slice(11, 16) === v)]));
-      }
-      if (k === 'genders') return `<h4>Хүйс</h4>` + chkList(k, D_GEN.map(([v, t]) => [v, t, nRows((r) => gVal(r, v) > 0)]));
-      if (k === 'ages') return `<h4>Насны бүлэг</h4>` + chkList(k, D_AGE.map(([v, t]) => [v, t, nRows((r) => (r['age_' + v] || 0) > 0)]));
-      if (k === 'sns') return `<h4>Төхөөрөмж</h4>` + chkList(k, devList().map((d) => [d.sn, d.name || d.sn, null]));
-      return `<h4>Байршил</h4>` + chkList(k, mine(state.locations).map((l) => [l.id, l.name, null]));
-    }
-    function openPop(btn) {
-      const k = btn.dataset.col, was = $('.fpop');
-      closeFPop();
-      if (was && was.dataset.col === k) return;
-      const el = document.createElement('div');
-      el.className = 'fpop' + (k === 'date' ? '' : ' wide'); el.dataset.col = k;
-      el.innerHTML = popHtml(k) + `<div class="fpa"><button type="button" class="btn sm ghost" data-clear>Цэвэрлэх</button><button type="button" class="btn sm" data-close>Хаах</button></div>`;
-      document.body.appendChild(el);
-      const r = btn.getBoundingClientRect();
-      el.style.top = Math.max(10, Math.min(r.bottom + 6, innerHeight - el.offsetHeight - 10)) + 'px';
-      el.style.left = Math.max(10, Math.min(r.left, innerWidth - el.offsetWidth - 10)) + 'px';
-      const first = el.querySelector('input, select'); if (first) setTimeout(() => first.focus(), 20);
-      const after = (srv) => { syncBtn(k); if (srv) { ctx(); tick(true); } else paint(); };
-      el.addEventListener('change', (e) => {
-        const c = e.target.closest('[data-m]');
-        if (c) {
-          const set = new Set(f[k]);
-          if (c.checked) set.add(c.value); else set.delete(c.value);
-          f[k] = [...set];
-          if (k === 'locs') { f.sns = []; syncBtn('sns'); }
-          return after(D_SRV.includes(k));
-        }
-        const i = e.target.closest('[data-f]');
-        if (!i) return;
-        f[i.dataset.f] = i.value;
-        if (f.from && f.to && f.from > f.to) { const t = f.from; f.from = f.to; f.to = t; el.querySelectorAll('[data-f]').forEach((x) => { x.value = f[x.dataset.f]; }); }
-        after(true);
-      });
-      el.querySelector('[data-close]').onclick = closeFPop;
-      el.querySelector('[data-clear]').onclick = () => {
-        if (k === 'date') { f.from = def.from; f.to = def.to; } else f[k] = [];
-        if (k === 'locs') f.sns = [];
-        syncBtn(k); syncBtn('sns'); closeFPop();
-        after(k === 'date' || D_SRV.includes(k));
-      };
-    }
-    $('#dtHead').onclick = (e) => { const b = e.target.closest('.fbtn'); if (b) { e.stopPropagation(); openPop(b); } };
-    $('#dtWrap').addEventListener('scroll', closeFPop, { passive: true });
-    $('#dtCsv').onclick = () => exportCsv(view);
-    $('#dtClr').onclick = () => { state.dataF = dFresh(); closeFPop(); render(); };
+    $('#dtFrom').onchange = $('#dtTo').onchange = (e) => {
+      f[e.target.id === 'dtFrom' ? 'from' : 'to'] = e.target.value;
+      if (f.from && f.to && f.from > f.to) { const t = f.from; f.from = f.to; f.to = t; $('#dtFrom').value = f.from; $('#dtTo').value = f.to; }
+      tick(true);
+    };
+    $('#dtClr').onclick = () => { gridApi.setFilterModel(null); };
+    $('#dtCsv').onclick = () => gridApi.exportDataAsCsv({ fileName: `footfall_${ubDate()}.csv` });
     const clock = () => setText('dtClock', clockText());
-    ctx(); clock(); await tick();
+    clock(); await tick();
     state.liveTimers = [setInterval(tick, 10000), setInterval(clock, 1000)];
-  }
-  function exportCsv(rows) {
-    if (!rows.length) return toast('Татах өгөгдөл алга', 'info');
-    const head = ['Date', 'Time', 'in', 'out', 'return', 'pass', 'Zone stay (ms)', 'Male', 'Female', 'Unknown', 'Height (cm)', 'Age (range)', 'Device (ID)', 'Device', 'Location'];
-    const cell = (v) => String(v == null ? '' : v).replace(/[,;\n]/g, ' ');
-    const lines = [head.join(',')].concat(rows.map((r) => [bDate(r.bucket), bTime(r.bucket), r.in_count, r.out_count, r.turnback, r.passby, r.avg_stay_ms || 0, r.male || 0, r.female || 0, r.gender_unknown || 0, r.avg_height_cm || '', r.age_min != null ? `${r.age_min}-${r.age_max}` : '', r.sn, cell(r.device_name), cell(r.location_name)].join(',')));
-    const blob = new Blob(['﻿' + lines.join('\n')], { type: 'text/csv;charset=utf-8' });
-    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `footfall_${ubDate()}.csv`; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
-    toast(`${fmt(rows.length)} мөр татагдлаа`);
   }
 
   // ================= ХЯНАЛТЫН САМБАР =================
