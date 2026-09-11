@@ -100,16 +100,23 @@ async function dataBuckets(f) {
        count(*) FILTER (WHERE coalesce(pp.gender,0) NOT IN (1,2))::int AS gender_unknown,
        avg(pp.height_cm) FILTER (WHERE pp.height_cm > 0)::int AS avg_height_cm,
        min(pp.age_min)::int AS age_min, max(pp.age_max)::int AS age_max,
-       count(*) FILTER (WHERE pp.age_min IS NOT NULL AND pp.age_min < 17)::int AS age_child,
-       count(*) FILTER (WHERE pp.age_min >= 17 AND pp.age_min < 31)::int AS age_young,
-       count(*) FILTER (WHERE pp.age_min >= 31 AND pp.age_min < 46)::int AS age_adult,
-       count(*) FILTER (WHERE pp.age_min >= 46)::int AS age_senior,
+       count(*) FILTER (WHERE pp.age_min IS NOT NULL AND pp.age_min < 17)::int AS age_0_16,
+       count(*) FILTER (WHERE pp.age_min >= 17 AND pp.age_min < 31)::int AS age_17_30,
+       count(*) FILTER (WHERE pp.age_min >= 31 AND pp.age_min < 46)::int AS age_31_45,
+       count(*) FILTER (WHERE pp.age_min >= 46 AND pp.age_min < 61)::int AS age_46_60,
+       count(*) FILTER (WHERE pp.age_min >= 61)::int AS age_61p,
+       count(*) FILTER (WHERE pp.age_min IS NULL)::int AS age_unknown,
+       count(*) FILTER (WHERE pp.height_cm > 0 AND pp.height_cm < 150)::int AS h_u150,
+       count(*) FILTER (WHERE pp.height_cm >= 150 AND pp.height_cm < 165)::int AS h_150_164,
+       count(*) FILTER (WHERE pp.height_cm >= 165 AND pp.height_cm < 180)::int AS h_165_179,
+       count(*) FILTER (WHERE pp.height_cm >= 180)::int AS h_180p,
+       count(*) FILTER (WHERE coalesce(pp.height_cm,0) <= 0)::int AS h_unknown,
        count(*) FILTER (WHERE coalesce(pp.workcard,0)=1)::int AS staff,
        count(*) FILTER (WHERE coalesce(pp.wheelchair,0)=1)::int AS wheelchair
      FROM person pp GROUP BY 1,2`, p2);
   const key = (b, sn) => `${String(b).replace(' ', 'T').slice(0, 19)}|${sn}`;
   const map = new Map();
-  const blank = { in_count: 0, out_count: 0, passby: 0, turnback: 0, avg_stay_ms: 0, people: 0, male: 0, female: 0, gender_unknown: 0, avg_height_cm: null, age_min: null, age_max: null, age_child: 0, age_young: 0, age_adult: 0, age_senior: 0, staff: 0, wheelchair: 0 };
+  const blank = { in_count: 0, out_count: 0, passby: 0, turnback: 0, avg_stay_ms: 0, people: 0, male: 0, female: 0, gender_unknown: 0, avg_height_cm: null, age_min: null, age_max: null, age_0_16: 0, age_17_30: 0, age_31_45: 0, age_46_60: 0, age_61p: 0, age_unknown: 0, h_u150: 0, h_150_164: 0, h_165_179: 0, h_180p: 0, h_unknown: 0, staff: 0, wheelchair: 0 };
   for (const r of flow.rows) map.set(key(r.bucket, r.sn), { ...blank, ...r, bucket: String(r.bucket).replace(' ', 'T').slice(0, 19) });
   for (const r of demo.rows) {
     const k = key(r.bucket, r.sn);

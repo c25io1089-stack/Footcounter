@@ -8,8 +8,10 @@
   /* Графикийн цуврал өнгө — өнгө ялгах чадвар (CVD ΔE), гэрэлтэлтийн зурвас, гадаргуутай харьцах
      контрастаар шалгагдсан. c1/c2 ба c1/c3 хос бүр нийлээд гарна; c-ctx = хоёрдогч (саарал) цуврал. */
   --c1: #3b82f6; --c2: #ea580c; --c3: #0f9d6b; --c4: #ec4899; --c-ctx: #64748b;
-  /* Эрэмбэтэй нэг өнгийн шатлал (насны бүлэг гэх мэт) — цайнаас бараан руу */
-  --o1: #86b6ef; --o2: #5598e7; --o3: #2a78d6; --o4: #184f95;
+  /* Эрэмбэтэй нэг өнгийн шатлал — цайнаас бараан руу. Нас (номин), Өндөр (улбар шар):
+     нэг дэлгэц дээр хоёр шатлал гарах тул тус бүр өөр өнгөтэй. */
+  --o1: #86b6ef; --o2: #5598e7; --o3: #2a78d6; --o4: #1c5cab; --o5: #104281;
+  --h1: #fb923c; --h2: #ea580c; --h3: #b8460e; --h4: #8a3310;
   --good: #047857; --good-soft: #e5f7ef; --bad: #b91c1c; --bad-soft: #feecec; --warn: #b45309; --warn-soft: #fff4e0; --info-soft: #eaf2ff;
   --side-bg: #0b1220; --side-bg-2: #101a30; --side-text: #cbd5e1; --side-muted: #64748b; --side-border: rgba(255,255,255,.06); --side-active: rgba(255,255,255,.08);
   --radius: 14px; --radius-sm: 10px;
@@ -25,7 +27,8 @@
     --s1: #5b9dff; --s2: #fb8f47; --s3: #2dd4a0; --s4: #fbbf24; --s5: #f472b6; --s6: #4ade80; --s7: #a78bfa; --s8: #f87171;
     /* Харанхуй горимд тусад нь сонгосон шат — автомат урвуулалт биш */
     --c1: #3987e5; --c2: #d95926; --c3: #199e70; --c4: #d55181; --c-ctx: #8d97a8;
-    --o1: #b7d3f6; --o2: #86b6ef; --o3: #3987e5; --o4: #256abf;
+    --o1: #cde2fb; --o2: #9ec5f4; --o3: #5598e7; --o4: #2a78d6; --o5: #184f95;
+    --h1: #fed7aa; --h2: #fb923c; --h3: #ea580c; --h4: #b8460e;
     --good: #5ed394; --good-soft: #10281c; --bad: #fca5a5; --bad-soft: #3a1a1a; --warn: #fbbf24; --warn-soft: #3a2a10; --info-soft: #172746;
     --side-bg: #0a0d13; --side-bg-2: #0e131c; --side-text: #cbd5e1; --side-muted: #64748b; --side-border: rgba(255,255,255,.06); --side-active: rgba(255,255,255,.08);
     --shadow-1: none; --shadow-2: 0 0 0 1px rgba(255,255,255,.02); --shadow-3: 0 24px 64px -12px rgba(0,0,0,.7);
@@ -190,8 +193,14 @@ input::placeholder { color: var(--muted); }
 .chart-wrap { position: relative; height: 300px; }
 .chart-wrap.sm { height: 220px; }
 .chart-wrap.bar1 { height: 56px; }   /* нэг хэвтээ хураангуй багана */
-.chart-wrap.bar4 { height: 148px; }  /* 4 хэвтээ багана */
-.card > .sub-h { display: flex; align-items: baseline; gap: 8px; margin: 18px 0 8px; padding-top: 14px; border-top: 1px solid var(--border); font-size: 13px; font-weight: 650; }
+.chart-wrap.bar5 { height: 152px; }  /* 5 хэвтээ багана */
+.chart-wrap.bar6 { height: 178px; }  /* 6 хэвтээ багана */
+/* Зочны бүтэц: хүйс / нас / өндөр гурван багана */
+.g-3 { grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+.prof h3 { display: flex; align-items: baseline; gap: 8px; margin: 0 0 10px; font-size: 13px; font-weight: 650; }
+.prof h3 .sub { font-weight: 500; }
+.prof + .prof { border-left: 1px solid var(--border); padding-left: 18px; }
+@media (max-width: 760px) { .prof + .prof { border-left: 0; padding-left: 0; border-top: 1px solid var(--border); padding-top: 16px; } }
 .stack { display: grid; gap: 14px; }
 .section { margin-top: 14px; }
 

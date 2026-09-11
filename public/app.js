@@ -213,8 +213,8 @@
       ctx.font = `650 11px ${Chart.defaults.font.family}`; ctx.fillStyle = o.color || css('--text-2'); ctx.textBaseline = 'middle';
       c.getDatasetMeta(0).data.forEach((el, i) => {
         const v = ds.data[i]; if (!v) return;
-        const t = fmt(v), w = ctx.measureText(t).width;
-        if (o.axis === 'y') { const x = el.x + 8; if (x + w > chartArea.right) return; ctx.textAlign = 'left'; ctx.fillText(t, x, el.y); }
+        const t = o.total ? `${fmt(v)} · ${pct(v, o.total)}` : fmt(v), w = ctx.measureText(t).width;
+        if (o.axis === 'y') { const x = el.x + 8; if (x + w > c.width - 4) return; ctx.textAlign = 'left'; ctx.fillText(t, x, el.y); }
         else { if (el.y - 14 < chartArea.top) return; ctx.textAlign = 'center'; ctx.fillText(t, el.x, el.y - 10); }
       });
       ctx.restore();
@@ -806,12 +806,15 @@ POST ${O}/api/camera/dup          — өдрийн DUP (realtime + final) тай
   const bDate = (b) => { const s = bKey(b); return `${s.slice(8, 10)}.${s.slice(5, 7)}.${s.slice(0, 4)}`; };
   const bTime = (b) => { const s = bKey(b); const h = +s.slice(11, 13), m = +s.slice(14, 16); const e = new Date(2000, 0, 1, h, m + 30); return `${s.slice(11, 16)}–${String(e.getHours()).padStart(2, '0')}:${String(e.getMinutes()).padStart(2, '0')}`; };
   const clockText = () => new Date().toLocaleTimeString('mn-MN', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+  // [талбарын нэр, шошго] — эрэмбэтэй; сүүлийнх нь «тодорхойгүй» тул шатлалд ордоггүй, саарал
+  const A_BANDS = [['0_16', '0–16'], ['17_30', '17–30'], ['31_45', '31–45'], ['46_60', '46–60'], ['61p', '61+'], ['unknown', 'Тодорхойгүй']];
+  const H_BANDS = [['u150', '< 150 см'], ['150_164', '150–164 см'], ['165_179', '165–179 см'], ['180p', '180+ см'], ['unknown', 'Тодорхойгүй']];
   const sumRows = (rows) => rows.reduce((a, r) => ({
     in: a.in + r.in_count, out: a.out + r.out_count, pass: a.pass + r.passby, back: a.back + r.turnback,
     male: a.male + (r.male || 0), female: a.female + (r.female || 0), unknown: a.unknown + (r.gender_unknown || 0),
-    child: a.child + (r.age_child || 0), young: a.young + (r.age_young || 0), adult: a.adult + (r.age_adult || 0), senior: a.senior + (r.age_senior || 0),
+    age: A_BANDS.map((b, i) => a.age[i] + (r['age_' + b[0]] || 0)), hgt: H_BANDS.map((b, i) => a.hgt[i] + (r['h_' + b[0]] || 0)),
     staff: a.staff + (r.staff || 0), people: a.people + (r.people || 0), hsum: a.hsum + (r.avg_height_cm || 0) * (r.people || 0),
-  }), { in: 0, out: 0, pass: 0, back: 0, male: 0, female: 0, unknown: 0, child: 0, young: 0, adult: 0, senior: 0, staff: 0, people: 0, hsum: 0 });
+  }), { in: 0, out: 0, pass: 0, back: 0, male: 0, female: 0, unknown: 0, age: A_BANDS.map(() => 0), hgt: H_BANDS.map(() => 0), staff: 0, people: 0, hsum: 0 });
   // Графикийг дахин үүсгэлгүй шинэчилнэ (анивчихгүй)
   function setChart(id, labels, arrays) {
     const c = charts[id]; if (!c) return false;
@@ -990,14 +993,17 @@ POST ${O}/api/camera/dup          — өдрийн DUP (realtime + final) тай
         <div class="live-actions"><span class="live-clock" id="dbClock"></span><button class="btn" id="dbFs" title="TV/монитор дээр тавихад">⛶ Бүтэн дэлгэц</button></div></div>
       <div id="dbNotice"></div>
       <div class="grid g-kpi hero" id="dbKpi"></div>
-      <div class="grid g-2 section">
-        <div class="card"><div class="head"><h2>Урсгал — 30 минутаар</h2><span class="sub" id="dbFlowSub"></span></div><div class="chart-wrap"><canvas id="cFlow30"></canvas></div></div>
-        <div class="card"><div class="head"><h2>Зочны бүтэц</h2><span class="sub" id="dbGenSub"></span></div>
-          <div class="chart-wrap bar1"><canvas id="cGender"></canvas></div>
-          <div class="legend" style="margin-top:10px" id="dbGenLegend"></div>
-          <h3 class="sub-h">Насны бүлэг <span class="sub muted" id="dbAgeSub"></span></h3>
-          <div class="chart-wrap bar4"><canvas id="cAge"></canvas></div></div>
-      </div>
+      <div class="card section"><div class="head"><h2>Урсгал — 30 минутаар</h2><span class="sub" id="dbFlowSub"></span></div><div class="chart-wrap"><canvas id="cFlow30"></canvas></div></div>
+      <div class="card section"><div class="head"><h2>Зочны бүтэц</h2><span class="sub" id="dbProfSub"></span></div>
+        <div class="grid g-3">
+          <div class="prof"><h3>Хүйс <span class="sub muted" id="dbGenSub"></span></h3>
+            <div class="chart-wrap bar1"><canvas id="cGender"></canvas></div>
+            <div class="legend" style="margin-top:10px" id="dbGenLegend"></div></div>
+          <div class="prof"><h3>Насны бүлэг <span class="sub muted" id="dbAgeSub"></span></h3>
+            <div class="chart-wrap bar6"><canvas id="cAge"></canvas></div></div>
+          <div class="prof"><h3>Өндөр <span class="sub muted" id="dbHgtSub"></span></h3>
+            <div class="chart-wrap bar5"><canvas id="cHeight"></canvas></div></div>
+        </div></div>
       <div class="card section"><div class="head"><h2>Байршлаар</h2><span class="sub">орсон хүн</span></div><div class="tbl-wrap"><table><thead><tr><th>Байршил</th><th class="num">Орсон</th><th class="num">Гарсан</th><th style="width:30%"></th></tr></thead><tbody id="dbLoc"></tbody></table></div></div>
       <div class="card section"><div class="head"><h2>Долоо хоногийн өдөр × цаг</h2><span class="sub">орсон хүний нягтрал</span></div><div id="heat"></div></div>`;
     $('#dbFs').onclick = toggleFs;
@@ -1051,7 +1057,8 @@ POST ${O}/api/camera/dup          — өдрийн DUP (realtime + final) тай
         plugins: [lineEnds] });
       }
       const gTotal = s.male + s.female + s.unknown;
-      setText('dbGenSub', gTotal ? `${fmt(gTotal)} зочин · дундаж өндөр ${s.people ? Math.round(s.hsum / s.people) + ' см' : '—'}` : 'өгөгдөл алга');
+      setText('dbProfSub', gTotal ? `${fmt(gTotal)} зочны танигдсан шинж` : 'өгөгдөл алга');
+      setText('dbGenSub', gTotal ? `${fmt(gTotal)} зочин` : 'өгөгдөл алга');
       setText('dbGenLegend', `<span style="--c:var(--c1)">Эр ${fmt(s.male)} (${pct(s.male, gTotal)})</span><span style="--c:var(--c4)">Эм ${fmt(s.female)} (${pct(s.female, gTotal)})</span>${s.unknown ? `<span style="--c:var(--c-ctx)">Тодорхойгүй ${fmt(s.unknown)}</span>` : ''}`);
       // Бүхэлд эзлэх хувь → хэвтээ давхарласан багана. Цагираг нь ойролцоо хоёр утгыг
       // (эр/эм ойролцоо гардаг) харьцуулахад муу; нэрс, тоо нь доорх тайлбарт бүтнээрээ байна.
@@ -1067,18 +1074,30 @@ POST ${O}/api/camera/dup          — өдрийн DUP (realtime + final) тай
             scales: { x: { stacked: true, display: false, min: 0, max: gTotal || 1 }, y: { stacked: true, display: false } },
             plugins: { legend: { display: false }, tooltip: { displayColors: true } } } });
       }
-      const ageData = [s.child, s.young, s.adult, s.senior], ageTotal = ageData.reduce((a, b) => a + b, 0);
-      setText('dbAgeSub', ageTotal ? `${fmt(ageTotal)} зочин` : 'өгөгдөл алга');
-      // Насны бүлэг эрэмбэтэй тул нэг өнгийн шатлал (цайнаас бараан) — өөр өөр өнгө өгвөл
-      // баганын уртыг өнгөөр давхар кодлож, өнгө нь утгагүй болно.
-      if (!setChart('cAge', null, [ageData])) {
-        mk('cAge', { type: 'bar', data: { labels: ['0–16', '17–30', '31–45', '46+'], datasets: [{ label: 'Зочин', data: ageData, backgroundColor: [css('--o1'), css('--o2'), css('--o3'), css('--o4')], maxBarThickness: 18 }] },
+      // Нас, өндөр: эрэмбэтэй бүлэг тул нэг өнгийн шатлал (цайнаас бараан) — өөр өөр өнгө
+      // өгвөл баганын уртыг өнгөөр давхар кодолж, өнгө нь утгагүй болно. «Тодорхойгүй» нь
+      // эрэмбэд ордоггүй тул саарал, мөн тоо нь 0 бол огт харуулахгүй.
+      const bandChart = (id, bands, data, ramp, sub) => {
+        const keep = data.map((v, i) => i).filter((i) => i < bands.length - 1 || data[i] > 0);
+        const vals = keep.map((i) => data[i]), total = data.reduce((a, b) => a + b, 0);
+        setText(sub, total ? `${fmt(total)} зочин` : 'өгөгдөл алга');
+        // Багануудын бүрэлдэхүүн өөрчлөгдвөл (жишээ нь «Тодорхойгүй» шинээр гарч ирвэл)
+        // өнгө нь мөрдөө таарахгүй болох тул зөвхөн ижил бүрэлдэхүүнтэй үед шинэчилнэ
+        const key = keep.join(',');
+        if (charts[id] && charts[id].$bandKey === key) { setChart(id, null, [vals]); return; }
+        mk(id, { type: 'bar', data: { labels: keep.map((i) => bands[i][1]), datasets: [{ label: 'Зочин', data: vals, maxBarThickness: 18,
+          backgroundColor: keep.map((i) => css(i === bands.length - 1 ? '--c-ctx' : ramp[i])) }] },
           options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, animation: false,
-            // Тэнхлэгийг хамгийн урт баганаас 25% сунгана — үзүүрийн тоо үргэлж багтана
-            scales: { x: { display: false, beginAtZero: true, max: Math.max(1, ...ageData) * 1.25 }, y: { grid: { display: false }, border: { display: false }, ticks: { padding: 2 } } },
-            plugins: { legend: { display: false }, barValues: { axis: 'y', color: css('--text-2') } } },
+            // Тэнхлэгийг хамгийн урт баганаас 35% сунгана — үзүүрийн тоо, хувь үргэлж багтана
+            scales: { x: { display: false, beginAtZero: true, max: Math.max(1, ...vals) * 1.35 }, y: { grid: { display: false }, border: { display: false }, ticks: { padding: 2 } } },
+            plugins: { legend: { display: false }, barValues: { axis: 'y', color: css('--text-2'), total } } },
           plugins: [barValues] });
-      }
+        if (charts[id]) charts[id].$bandKey = key;
+      };
+      bandChart('cAge', A_BANDS, s.age, ['--o1', '--o2', '--o3', '--o4', '--o5'], 'dbAgeSub');
+      bandChart('cHeight', H_BANDS, s.hgt, ['--h1', '--h2', '--h3', '--h4'], 'dbHgtSub');
+      const hTotal = s.hgt.reduce((a, b) => a + b, 0) - s.hgt[H_BANDS.length - 1];
+      setText('dbHgtSub', hTotal ? `${fmt(hTotal)} зочин · дундаж ${s.people ? Math.round(s.hsum / s.people) : '—'} см` : 'өгөгдөл алга');
       const topIn = ov.by_location[0] ? ov.by_location[0].in_count : 0;
       setText('dbLoc', ov.by_location.map((l) => `<tr><td><b>${esc(l.location_name)}</b><br><span class="small muted">${l.online_count}/${l.device_count} online</span></td><td class="num">${fmt(l.in_count)}</td><td class="num">${fmt(l.out_count)}</td><td><div class="bar"><i style="width:${pct(l.in_count, topIn)}"></i></div></td></tr>`).join('') || '<tr><td colspan="4" class="empty">Байршил алга</td></tr>');
       const lu = $('#lastUpd'); if (lu) lu.textContent = 'Шинэчилсэн ' + clockText();
