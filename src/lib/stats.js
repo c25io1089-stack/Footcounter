@@ -66,6 +66,57 @@ async function flowSeries(f) {
   return r.rows.map((x) => ({ ...x, bucket: String(x.bucket).replace(' ', 'T').slice(0, 19) }));
 }
 
+// 30 минутын нэгтгэл: төхөөрөмж бүрээр урсгал + зочны бүтэц (Өгөгдөл хуудас, Хяналтын самбарын графикууд)
+async function dataBuckets(f) {
+  const tz = f.tz || DEFAULT_TZ;
+  const limit = Math.min(Number(f.limit) || 800, 5000);
+  const B = (col) => `(date_trunc('hour', ${col} AT TIME ZONE $1) + interval '30 min' * (extract(minute FROM ${col} AT TIME ZONE $1)::int / 30))`;
+  const p = [tz];
+  const flow = await query(
+    `SELECT ${B('fr.ts')} AS bucket, fr.sn, d.name AS device_name, l.name AS location_name,
+       sum(fr.in_count)::int AS in_count, sum(fr.out_count)::int AS out_count,
+       sum(fr.passby)::int AS passby, sum(fr.turnback)::int AS turnback,
+       CASE WHEN sum(fr.in_count)>0 THEN (sum(fr.avg_stay_ms*fr.in_count)/sum(fr.in_count))::int ELSE 0 END AS avg_stay_ms
+     FROM flow_records fr JOIN devices d ON d.sn=fr.sn LEFT JOIN locations l ON l.id=d.location_id
+     WHERE fr.data_mode='Add' ${scope(f, p)} ${range(f, p, 'fr.ts')}
+     GROUP BY 1,2,3,4 ORDER BY 1 DESC LIMIT ${limit}`, p);
+  // Зочны бүтэц: хүн бүрийг (sn, id_index) нэг удаа — мэдээлэл илүүтэй мөрөөр (ихэвчлэн гарах үйл явдал)
+  const p2 = [tz];
+  const demo = await query(
+    `WITH person AS (
+       SELECT DISTINCT ON (pe.sn, coalesce(pe.id_index, pe.id)) pe.sn, pe.ts, pe.gender, pe.age_min, pe.age_max, pe.height_cm, pe.workcard, pe.wheelchair
+       FROM person_events pe JOIN devices d ON d.sn=pe.sn
+       WHERE pe.event_type IN (0,1) ${scope(f, p2)} ${range(f, p2, 'pe.ts')}
+       ORDER BY pe.sn, coalesce(pe.id_index, pe.id),
+         (CASE WHEN pe.gender IN (1,2) THEN 0 ELSE 1 END), (CASE WHEN pe.age_min IS NULL THEN 1 ELSE 0 END), pe.event_type DESC, pe.ts DESC
+     )
+     SELECT ${B('pp.ts')} AS bucket, pp.sn,
+       count(*)::int AS people,
+       count(*) FILTER (WHERE pp.gender=1)::int AS male,
+       count(*) FILTER (WHERE pp.gender=2)::int AS female,
+       count(*) FILTER (WHERE coalesce(pp.gender,0) NOT IN (1,2))::int AS gender_unknown,
+       avg(pp.height_cm) FILTER (WHERE pp.height_cm > 0)::int AS avg_height_cm,
+       min(pp.age_min)::int AS age_min, max(pp.age_max)::int AS age_max,
+       count(*) FILTER (WHERE pp.age_min IS NOT NULL AND pp.age_min < 17)::int AS age_child,
+       count(*) FILTER (WHERE pp.age_min >= 17 AND pp.age_min < 31)::int AS age_young,
+       count(*) FILTER (WHERE pp.age_min >= 31 AND pp.age_min < 46)::int AS age_adult,
+       count(*) FILTER (WHERE pp.age_min >= 46)::int AS age_senior,
+       count(*) FILTER (WHERE coalesce(pp.workcard,0)=1)::int AS staff,
+       count(*) FILTER (WHERE coalesce(pp.wheelchair,0)=1)::int AS wheelchair
+     FROM person pp GROUP BY 1,2`, p2);
+  const key = (b, sn) => `${String(b).replace(' ', 'T').slice(0, 19)}|${sn}`;
+  const map = new Map();
+  const blank = { in_count: 0, out_count: 0, passby: 0, turnback: 0, avg_stay_ms: 0, people: 0, male: 0, female: 0, gender_unknown: 0, avg_height_cm: null, age_min: null, age_max: null, age_child: 0, age_young: 0, age_adult: 0, age_senior: 0, staff: 0, wheelchair: 0 };
+  for (const r of flow.rows) map.set(key(r.bucket, r.sn), { ...blank, ...r, bucket: String(r.bucket).replace(' ', 'T').slice(0, 19) });
+  for (const r of demo.rows) {
+    const k = key(r.bucket, r.sn);
+    const cur = map.get(k) || { ...blank, bucket: String(r.bucket).replace(' ', 'T').slice(0, 19), sn: r.sn, device_name: null, location_name: null };
+    map.set(k, { ...cur, ...r, bucket: cur.bucket, device_name: cur.device_name, location_name: cur.location_name });
+  }
+  const rows = [...map.values()].sort((a, b) => (a.bucket < b.bucket ? 1 : a.bucket > b.bucket ? -1 : 0)).slice(0, limit);
+  return { rows, tz, now: new Date().toISOString() };
+}
+
 async function flowTotals(f) {
   const p = [];
   const r = await query(
@@ -314,5 +365,5 @@ async function flowRecords(f) {
 
 module.exports = {
   ONLINE_WINDOW_MIN, DEFAULT_TZ, listLocations, listDevices, flowSeries, flowTotals, flowByLocation, flowByDevice,
-  currentOccupancy, heatmap, demographics, reidSummary, dedupSummary, personEvents, flowRecords, liveVisits,
+  currentOccupancy, heatmap, demographics, reidSummary, dedupSummary, personEvents, flowRecords, liveVisits, dataBuckets,
 };

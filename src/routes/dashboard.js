@@ -96,7 +96,9 @@ router.get('/admin/summary', auth.requireRole('superadmin'), wrap(async (req, re
 
 // ---- Өгөгдөл (зөвхөн байгууллагын admin/viewer; superadmin байгууллагын өгөгдлийг харахгүй) ----
 const tenantData = auth.requireRole('admin', 'viewer');
-router.use(['/overview', '/live', '/flow', '/occupancy', '/demographics', '/events', '/reid', '/dedup'], tenantData);
+router.use(['/overview', '/live', '/data', '/flow', '/occupancy', '/demographics', '/events', '/reid', '/dedup'], tenantData);
+// 30 минутын нэгтгэл (Өгөгдөл хуудас + Хяналтын самбар)
+router.get('/data', wrap(async (req, res) => res.json(await stats.dataBuckets(filters(req)))));
 // Бодит цагийн самбар: одоо байгаа хүн, өнөөдрийн нийлбэр (from/to query), сүүлийн 60 минут минутаар, сүүлийн 1 цагийн хүн бүрийн үйл явдал, төхөөрөмжийн төлөв
 router.get('/live', wrap(async (req, res) => {
   const f = filters(req);

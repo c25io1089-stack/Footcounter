@@ -195,6 +195,10 @@ th { color: var(--muted); font-weight: 600; font-size: 11px; text-transform: upp
 tbody tr:last-child td { border-bottom: 0; }
 td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 tbody tr { transition: background .1s; } tbody tr:hover td { background: var(--surface-2); }
+/* Одоогийн (бодит цагт өсөж буй) 30 минутын мөр */
+tbody tr.live-row td { background: color-mix(in srgb, var(--good) 9%, var(--surface)); font-weight: 500; }
+tbody tr.live-row td:first-child { box-shadow: inset 3px 0 0 var(--good); }
+tbody tr.live-row .pill { padding: 1px 7px; font-size: 10.5px; }
 .tbl-wrap { overflow-x: auto; margin: 0 -20px; padding: 0 20px; }
 .tbl-wrap table { min-width: 0; }
 @media (max-width: 860px) { .tbl-wrap table { min-width: 520px; } }
