@@ -5,6 +5,11 @@
   --text: #0f172a; --text-2: #475569; --muted: #64748b; /* muted: цагаан дээр 4.8:1 (WCAG AA) */
   --accent: #3b82f6; --accent-hover: #2563eb; --accent-soft: #eaf2ff; --accent-ring: rgba(59,130,246,.28);
   --s1: #3b82f6; --s2: #f97316; --s3: #10b981; --s4: #f59e0b; --s5: #ec4899; --s6: #22c55e; --s7: #8b5cf6; --s8: #ef4444;
+  /* Графикийн цуврал өнгө — өнгө ялгах чадвар (CVD ΔE), гэрэлтэлтийн зурвас, гадаргуутай харьцах
+     контрастаар шалгагдсан. c1/c2 ба c1/c3 хос бүр нийлээд гарна; c-ctx = хоёрдогч (саарал) цуврал. */
+  --c1: #3b82f6; --c2: #ea580c; --c3: #ec4899; --c-ctx: #64748b;
+  /* Эрэмбэтэй нэг өнгийн шатлал (насны бүлэг гэх мэт) — цайнаас бараан руу */
+  --o1: #86b6ef; --o2: #5598e7; --o3: #2a78d6; --o4: #184f95;
   --good: #047857; --good-soft: #e5f7ef; --bad: #b91c1c; --bad-soft: #feecec; --warn: #b45309; --warn-soft: #fff4e0; --info-soft: #eaf2ff;
   --side-bg: #0b1220; --side-bg-2: #101a30; --side-text: #cbd5e1; --side-muted: #64748b; --side-border: rgba(255,255,255,.06); --side-active: rgba(255,255,255,.08);
   --radius: 14px; --radius-sm: 10px;
@@ -18,6 +23,9 @@
     --text: #f1f5f9; --text-2: #b6c0cf; --muted: #8d97a8;
     --accent: #5b9dff; --accent-hover: #7bb0ff; --accent-soft: #172746; --accent-ring: rgba(91,157,255,.35);
     --s1: #5b9dff; --s2: #fb8f47; --s3: #2dd4a0; --s4: #fbbf24; --s5: #f472b6; --s6: #4ade80; --s7: #a78bfa; --s8: #f87171;
+    /* Харанхуй горимд тусад нь сонгосон шат — автомат урвуулалт биш */
+    --c1: #3987e5; --c2: #d95926; --c3: #d55181; --c-ctx: #8d97a8;
+    --o1: #b7d3f6; --o2: #86b6ef; --o3: #3987e5; --o4: #256abf;
     --good: #5ed394; --good-soft: #10281c; --bad: #fca5a5; --bad-soft: #3a1a1a; --warn: #fbbf24; --warn-soft: #3a2a10; --info-soft: #172746;
     --side-bg: #0a0d13; --side-bg-2: #0e131c; --side-text: #cbd5e1; --side-muted: #64748b; --side-border: rgba(255,255,255,.06); --side-active: rgba(255,255,255,.08);
     --shadow-1: none; --shadow-2: 0 0 0 1px rgba(255,255,255,.02); --shadow-3: 0 24px 64px -12px rgba(0,0,0,.7);
@@ -181,6 +189,9 @@ input::placeholder { color: var(--muted); }
 .kpi.accent::after { content: ""; position: absolute; inset: 0 0 auto 0; height: 3px; border-radius: var(--radius) var(--radius) 0 0; background: linear-gradient(90deg, #3b82f6, #8b5cf6); }
 .chart-wrap { position: relative; height: 300px; }
 .chart-wrap.sm { height: 220px; }
+.chart-wrap.bar1 { height: 56px; }   /* нэг хэвтээ хураангуй багана */
+.chart-wrap.bar4 { height: 148px; }  /* 4 хэвтээ багана */
+.card > .sub-h { display: flex; align-items: baseline; gap: 8px; margin: 18px 0 8px; padding-top: 14px; border-top: 1px solid var(--border); font-size: 13px; font-weight: 650; }
 .stack { display: grid; gap: 14px; }
 .section { margin-top: 14px; }
 

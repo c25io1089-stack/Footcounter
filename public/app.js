@@ -153,16 +153,45 @@
   }
 
   // ---- Chart helpers (Chart.js) ----
+  // Графикийн нэгдсэн хэв маяг: өгөгдөл нь л тод, тор/тэнхлэг намуур.
+  // Багана ≤24px, өгөгдлийн үзүүр 4px мөлгөр — суурь нь тэгш; шугам 2px; цэг дээр 2px
+  // гадаргууны цагираг (давхцахад ялгарна).
   function chartDefaults() {
     Chart.defaults.color = css('--text-2'); Chart.defaults.borderColor = css('--border');
     Chart.defaults.font.family = getComputedStyle(document.body).fontFamily; Chart.defaults.font.size = 12;
-    Chart.defaults.plugins.legend.labels.boxWidth = 10; Chart.defaults.plugins.legend.labels.boxHeight = 10; Chart.defaults.plugins.legend.labels.usePointStyle = true; Chart.defaults.plugins.legend.labels.pointStyle = 'circle';
+    Chart.defaults.plugins.legend.labels.boxWidth = 8; Chart.defaults.plugins.legend.labels.boxHeight = 8; Chart.defaults.plugins.legend.labels.padding = 14; Chart.defaults.plugins.legend.labels.usePointStyle = true; Chart.defaults.plugins.legend.labels.pointStyle = 'circle';
     Chart.defaults.plugins.tooltip.backgroundColor = css('--text'); Chart.defaults.plugins.tooltip.titleColor = css('--bg'); Chart.defaults.plugins.tooltip.bodyColor = css('--bg');
-    Chart.defaults.plugins.tooltip.padding = 10; Chart.defaults.plugins.tooltip.cornerRadius = 8; Chart.defaults.plugins.tooltip.displayColors = true; Chart.defaults.plugins.tooltip.boxPadding = 4;
-    Chart.defaults.elements.bar.borderRadius = 5; Chart.defaults.elements.bar.borderSkipped = false; Chart.defaults.elements.line.borderWidth = 2; Chart.defaults.elements.point.radius = 0; Chart.defaults.elements.point.hoverRadius = 4;
-    Chart.defaults.scales.linear.ticks.padding = 6; Chart.defaults.scales.category.ticks.padding = 4; Chart.defaults.animation.duration = 500;
+    Chart.defaults.plugins.tooltip.padding = 10; Chart.defaults.plugins.tooltip.cornerRadius = 8; Chart.defaults.plugins.tooltip.displayColors = true; Chart.defaults.plugins.tooltip.boxPadding = 4; Chart.defaults.plugins.tooltip.usePointStyle = true;
+    // Утгын тэнхлэг хэвтээ график дээр x, босоо дээр y — индексийг утга гэж уншихаас сэргийлнэ
+    Chart.defaults.plugins.tooltip.callbacks.label = (c) => {
+      const v = c.chart.options.indexAxis === 'y' ? c.parsed.x : c.parsed.y;
+      return ` ${c.dataset.label || c.label}: ${fmt(v == null ? c.parsed : v)}`;
+    };
+    Chart.defaults.elements.bar.borderRadius = 4; Chart.defaults.elements.bar.borderSkipped = 'start'; Chart.defaults.elements.bar.maxBarThickness = 24;
+    Chart.defaults.elements.line.borderWidth = 2; Chart.defaults.elements.line.borderJoinStyle = 'round'; Chart.defaults.elements.line.borderCapStyle = 'round';
+    Chart.defaults.elements.point.radius = 0; Chart.defaults.elements.point.hoverRadius = 5; Chart.defaults.elements.point.hoverBorderWidth = 2; Chart.defaults.elements.point.hoverBorderColor = css('--surface');
+    Chart.defaults.scales.linear.ticks.padding = 6; Chart.defaults.scales.linear.ticks.callback = (v) => fmt(v);
+    Chart.defaults.scales.category.ticks.padding = 4; Chart.defaults.animation.duration = 500;
   }
   function mk(id, cfg) { const el = $('#' + id); if (!el) return; if (charts[id]) charts[id].destroy(); charts[id] = new Chart(el, cfg); }
+  // Багана бүрийн утгыг үзүүр дээр нь бичнэ (цөөн баганатай график дээр л — бүх цэг дээр биш).
+  // Багтахгүй бол алгасна: тэмдэглэгээндээ тасрахаас тайлбаргүй байсан нь дээр.
+  const barValues = {
+    id: 'barValues',
+    afterDatasetsDraw(c, a, o) {
+      const ds = c.data.datasets[0]; if (!ds) return;
+      const { ctx, chartArea } = c;
+      ctx.save();
+      ctx.font = `650 11px ${Chart.defaults.font.family}`; ctx.fillStyle = o.color || css('--text-2'); ctx.textBaseline = 'middle';
+      c.getDatasetMeta(0).data.forEach((el, i) => {
+        const v = ds.data[i]; if (!v) return;
+        const t = fmt(v), w = ctx.measureText(t).width;
+        if (o.axis === 'y') { const x = el.x + 8; if (x + w > chartArea.right) return; ctx.textAlign = 'left'; ctx.fillText(t, x, el.y); }
+        else { if (el.y - 14 < chartArea.top) return; ctx.textAlign = 'center'; ctx.fillText(t, el.x, el.y - 10); }
+      });
+      ctx.restore();
+    },
+  };
   const bucketLabel = (b, g) => { const d = new Date(b + 'Z'); return g === 'hour' ? d.getUTCHours().toString().padStart(2, '0') + ':00' : g === 'week' ? d.getUTCMonth() + 1 + '/' + d.getUTCDate() + ' 7х' : d.getUTCMonth() + 1 + '/' + d.getUTCDate(); };
 
   // ================= LOGIN =================
@@ -935,13 +964,13 @@ POST ${O}/api/camera/dup          — өдрийн DUP (realtime + final) тай
       <div class="grid g-kpi hero" id="dbKpi"></div>
       <div class="grid g-2 section">
         <div class="card"><div class="head"><h2>Урсгал — 30 минутаар</h2><span class="sub" id="dbFlowSub"></span></div><div class="chart-wrap"><canvas id="cFlow30"></canvas></div></div>
-        <div class="card"><div class="head"><h2>Хүйс</h2><span class="sub" id="dbGenSub"></span></div><div class="chart-wrap sm"><canvas id="cGender"></canvas></div>
-          <div class="legend" style="justify-content:center;margin-top:10px" id="dbGenLegend"></div></div>
+        <div class="card"><div class="head"><h2>Зочны бүтэц</h2><span class="sub" id="dbGenSub"></span></div>
+          <div class="chart-wrap bar1"><canvas id="cGender"></canvas></div>
+          <div class="legend" style="margin-top:10px" id="dbGenLegend"></div>
+          <h3 class="sub-h">Насны бүлэг <span class="sub muted" id="dbAgeSub"></span></h3>
+          <div class="chart-wrap bar4"><canvas id="cAge"></canvas></div></div>
       </div>
-      <div class="grid g-2 section">
-        <div class="card"><div class="head"><h2>Насны бүлэг</h2><span class="sub" id="dbAgeSub"></span></div><div class="chart-wrap sm"><canvas id="cAge"></canvas></div></div>
-        <div class="card"><div class="head"><h2>Байршлаар</h2><span class="sub">орсон хүн</span></div><div class="tbl-wrap"><table><thead><tr><th>Байршил</th><th class="num">Орсон</th><th class="num">Гарсан</th><th style="width:30%"></th></tr></thead><tbody id="dbLoc"></tbody></table></div></div>
-      </div>
+      <div class="card section"><div class="head"><h2>Байршлаар</h2><span class="sub">орсон хүн</span></div><div class="tbl-wrap"><table><thead><tr><th>Байршил</th><th class="num">Орсон</th><th class="num">Гарсан</th><th style="width:30%"></th></tr></thead><tbody id="dbLoc"></tbody></table></div></div>
       <div class="card section"><div class="head"><h2>Долоо хоногийн өдөр × цаг</h2><span class="sub">орсон хүний нягтрал</span></div><div id="heat"></div></div>`;
     $('#dbFs').onclick = toggleFs;
     const clock = () => setText('dbClock', clockText());
@@ -973,33 +1002,52 @@ POST ${O}/api/camera/dup          — өдрийн DUP (realtime + final) тай
         kpi({ label: 'Одоо дотор байгаа', value: fmt(ov.occupancy.total), sub: ov.occupancy.devices.some((x) => x.from_snapshot) ? 'төхөөрөмжийн тоолол' : 'орсон − гарсан', ico: 'people', c: 3 }),
       ].join(''));
       const byB = new Map();
-      for (const r of data.rows) { const k = bKey(r.bucket); const o = byB.get(k) || { k, in: 0, out: 0, pass: 0 }; o.in += r.in_count; o.out += r.out_count; o.pass += r.passby; byB.set(k, o); }
+      for (const r of data.rows) { const k = bKey(r.bucket); const o = byB.get(k) || { k, in: 0, out: 0 }; o.in += r.in_count; o.out += r.out_count; byB.set(k, o); }
       const buckets = [...byB.values()].sort((a, b) => (a.k < b.k ? -1 : 1)).slice(-48);
-      const labels = buckets.map((b) => b.k.slice(11, 16)), ins = buckets.map((b) => b.in), outs = buckets.map((b) => b.out), passes = buckets.map((b) => b.pass);
+      const labels = buckets.map((b) => b.k.slice(11, 16)), ins = buckets.map((b) => b.in), outs = buckets.map((b) => b.out);
       const cur = curBucketKey(), last = buckets[buckets.length - 1];
       setText('dbFlowSub', buckets.length ? `сүүлийн ${buckets.length} үе${last && last.k === cur ? ` · одоогийн үе: ${fmt(last.in)} орсон` : ''}` : 'өгөгдөл алга');
-      if (!setChart('cFlow30', labels, [ins, outs, passes])) {
+      if (!setChart('cFlow30', labels, [ins, outs])) {
+        // Зөвхөн Орсон/Гарсан. «Өнгөрсөн» нь 10-15 дахин том тоо тул нэг тэнхлэг дээр
+        // нийлүүлбэл энэ хоёрыг шалан дээр дарчихдаг — тэр үзүүлэлт дээд талын KPI-д бий.
         mk('cFlow30', { data: { labels, datasets: [
-          { type: 'bar', label: 'Орсон', data: ins, backgroundColor: css('--s1') },
-          { type: 'bar', label: 'Гарсан', data: outs, backgroundColor: css('--s2') },
-          { type: 'line', label: 'Өнгөрсөн', data: passes, borderColor: css('--s4'), backgroundColor: css('--s4') + '22', fill: true, tension: .35, borderWidth: 2 },
+          { type: 'bar', label: 'Орсон', data: ins, backgroundColor: css('--c1'), categoryPercentage: .72, barPercentage: .88 },
+          { type: 'bar', label: 'Гарсан', data: outs, backgroundColor: css('--c2'), categoryPercentage: .72, barPercentage: .88 },
         ] },
         options: { responsive: true, maintainAspectRatio: false, animation: false, interaction: { mode: 'index', intersect: false },
-          scales: { x: { grid: { display: false }, ticks: { maxTicksLimit: 10 } }, y: { beginAtZero: true, grid: { color: css('--border') }, border: { display: false }, ticks: { precision: 0 } } },
+          layout: { padding: { top: 2 } },
+          scales: { x: { grid: { display: false }, border: { color: css('--border') }, ticks: { maxTicksLimit: 8, autoSkipPadding: 16 } },
+            y: { beginAtZero: true, grid: { color: css('--border'), drawTicks: false }, border: { display: false }, ticks: { precision: 0, maxTicksLimit: 5 } } },
           plugins: { legend: { position: 'top', align: 'end' } } } });
       }
       const gTotal = s.male + s.female + s.unknown;
       setText('dbGenSub', gTotal ? `${fmt(gTotal)} зочин · дундаж өндөр ${s.people ? Math.round(s.hsum / s.people) + ' см' : '—'}` : 'өгөгдөл алга');
-      setText('dbGenLegend', `<span style="--c:var(--s1)">Эр ${fmt(s.male)} (${pct(s.male, gTotal)})</span><span style="--c:var(--s5)">Эм ${fmt(s.female)} (${pct(s.female, gTotal)})</span>${s.unknown ? `<span style="--c:var(--muted)">Тодорхойгүй ${fmt(s.unknown)}</span>` : ''}`);
-      if (!setChart('cGender', null, [[s.male, s.female, s.unknown]])) {
-        mk('cGender', { type: 'doughnut', data: { labels: ['Эрэгтэй', 'Эмэгтэй', 'Тодорхойгүй'], datasets: [{ data: [s.male, s.female, s.unknown], backgroundColor: [css('--s1'), css('--s5'), css('--muted')], borderWidth: 2, borderColor: css('--surface') }] },
-          options: { responsive: true, maintainAspectRatio: false, animation: false, cutout: '65%', plugins: { legend: { display: false } } } });
+      setText('dbGenLegend', `<span style="--c:var(--c1)">Эр ${fmt(s.male)} (${pct(s.male, gTotal)})</span><span style="--c:var(--c3)">Эм ${fmt(s.female)} (${pct(s.female, gTotal)})</span>${s.unknown ? `<span style="--c:var(--c-ctx)">Тодорхойгүй ${fmt(s.unknown)}</span>` : ''}`);
+      // Бүхэлд эзлэх хувь → хэвтээ давхарласан багана. Цагираг нь ойролцоо хоёр утгыг
+      // (эр/эм ойролцоо гардаг) харьцуулахад муу; нэрс, тоо нь доорх тайлбарт бүтнээрээ байна.
+      if (!setChart('cGender', null, [[s.male], [s.female], [s.unknown]])) {
+        const gap = { borderColor: css('--surface'), borderWidth: 1, borderRadius: 4, borderSkipped: false, maxBarThickness: 30 };
+        mk('cGender', { type: 'bar', data: { labels: [''], datasets: [
+          { label: 'Эрэгтэй', data: [s.male], backgroundColor: css('--c1'), ...gap },
+          { label: 'Эмэгтэй', data: [s.female], backgroundColor: css('--c3'), ...gap },
+          { label: 'Тодорхойгүй', data: [s.unknown], backgroundColor: css('--c-ctx'), ...gap },
+        ] },
+          options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, animation: false,
+            // max = нийлбэр: багана савныхаа бүтэн өргөнийг эзэлж, сегментүүд шууд хувь болж уншигдана
+            scales: { x: { stacked: true, display: false, min: 0, max: gTotal || 1 }, y: { stacked: true, display: false } },
+            plugins: { legend: { display: false }, tooltip: { displayColors: true } } } });
       }
       const ageData = [s.child, s.young, s.adult, s.senior], ageTotal = ageData.reduce((a, b) => a + b, 0);
       setText('dbAgeSub', ageTotal ? `${fmt(ageTotal)} зочин` : 'өгөгдөл алга');
+      // Насны бүлэг эрэмбэтэй тул нэг өнгийн шатлал (цайнаас бараан) — өөр өөр өнгө өгвөл
+      // баганын уртыг өнгөөр давхар кодлож, өнгө нь утгагүй болно.
       if (!setChart('cAge', null, [ageData])) {
-        mk('cAge', { type: 'bar', data: { labels: ['0–16', '17–30', '31–45', '46+'], datasets: [{ label: 'Зочин', data: ageData, backgroundColor: [css('--s3'), css('--s1'), css('--s7'), css('--s4')] }] },
-          options: { responsive: true, maintainAspectRatio: false, animation: false, scales: { x: { grid: { display: false } }, y: { beginAtZero: true, grid: { color: css('--border') }, border: { display: false }, ticks: { precision: 0 } } }, plugins: { legend: { display: false } } } });
+        mk('cAge', { type: 'bar', data: { labels: ['0–16', '17–30', '31–45', '46+'], datasets: [{ label: 'Зочин', data: ageData, backgroundColor: [css('--o1'), css('--o2'), css('--o3'), css('--o4')], maxBarThickness: 18 }] },
+          options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, animation: false,
+            // Тэнхлэгийг хамгийн урт баганаас 25% сунгана — үзүүрийн тоо үргэлж багтана
+            scales: { x: { display: false, beginAtZero: true, max: Math.max(1, ...ageData) * 1.25 }, y: { grid: { display: false }, border: { display: false }, ticks: { padding: 2 } } },
+            plugins: { legend: { display: false }, barValues: { axis: 'y', color: css('--text-2') } } },
+          plugins: [barValues] });
       }
       const topIn = ov.by_location[0] ? ov.by_location[0].in_count : 0;
       setText('dbLoc', ov.by_location.map((l) => `<tr><td><b>${esc(l.location_name)}</b><br><span class="small muted">${l.online_count}/${l.device_count} online</span></td><td class="num">${fmt(l.in_count)}</td><td class="num">${fmt(l.out_count)}</td><td><div class="bar"><i style="width:${pct(l.in_count, topIn)}"></i></div></td></tr>`).join('') || '<tr><td colspan="4" class="empty">Байршил алга</td></tr>');
