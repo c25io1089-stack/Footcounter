@@ -809,7 +809,6 @@ POST ${O}/api/camera/dup          — өдрийн DUP (realtime + final) тай
     $('#page').innerHTML = `
       <div class="live-top"><div class="live-ctx"><span class="pill on"><i class="dot"></i>LIVE</span> <span id="dtCtx"></span></div>
         <div class="live-actions"><span class="live-clock" id="dtClock"></span><button class="btn" id="dtClr" hidden>Шүүлтүүр цэвэрлэх</button><button class="btn" id="dtCsv">⤓ CSV татах</button></div></div>
-      <div class="stats" id="dtSum"></div>
       <div class="card section"><div class="head"><h2>30 минутын нэгтгэл</h2><span class="sub" id="dtCount"></span></div>
         <div class="tbl-wrap" id="dtWrap" style="max-height:66vh;overflow:auto">
           <table><thead id="dtHead"><tr>${D_COLS.map(th).join('')}</tr></thead>
@@ -836,8 +835,7 @@ POST ${O}/api/camera/dup          — өдрийн DUP (realtime + final) тай
     }
     function paint() {
       view = rows.filter(keep);
-      const s = sumRows(view), cur = curBucketKey();
-      setText('dtSum', `<span><b>${fmt(s.in)}</b> орсон</span><span><b>${fmt(s.out)}</b> гарсан</span><span><b>${fmt(s.back)}</b> буцсан</span><span><b>${fmt(s.pass)}</b> өнгөрсөн</span><span><b>${fmt(s.male)}</b> эр · <b>${fmt(s.female)}</b> эм</span><span><b>${s.people ? Math.round(s.hsum / s.people) + ' см' : '—'}</b> дундаж өндөр</span>`);
+      const cur = curBucketKey();
       setText('dtCount', `${fmt(view.length)}${view.length !== rows.length ? ' / ' + fmt(rows.length) : ''} мөр${rows.length >= D_LIM ? ` · хамгийн сүүлийн ${fmt(D_LIM)}-аар хязгаарласан` : ''} · шинэчилсэн ${clockText()}`);
       const clr = $('#dtClr'); if (clr) clr.hidden = !dirty();
       const html = view.map((r) => {
