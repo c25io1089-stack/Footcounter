@@ -764,19 +764,23 @@ POST ${O}/api/camera/dup          — өдрийн DUP (realtime + final) тай
   }
 
   // ================= ӨГӨГДӨЛ (30 минутын нэгтгэл) =================
-  // Шүүлтүүр багана бүрийн гарчгийн хажууд жижиг icon-оор. Дарахад попап нээгдэж,
-  // утга оруулмагц icon идэвхтэй болж сонгосон утгаа өөр дээрээ харуулна.
-  // Огноо/Төхөөрөмж/Байршил → сервер рүү дахин хүсэлт, бусад нь ачаалсан мөрүүд дээр шууд.
-  const D_SRV = ['from', 'to', 'sn', 'loc'];
-  // fl = 1 → энэ баганад шүүлтүүрийн icon гарна (тоон багануудыг шүүхгүй)
+  // Шүүлтүүр багана бүрийн гарчгийн хажууд icon-оор. Дарахад боломжит хувилбаруудын
+  // жагсаалт гарч, check хийж олноор сонгоно (юу ч сонгоогүй = бүгд).
+  // Төхөөрөмж/Байршил/Огноо → сервер рүү дахин хүсэлт, бусад нь ачаалсан мөрүүд дээр шууд.
   const D_COLS = [
-    { k: 'date', t: 'Огноо', fl: 1 }, { k: 'time', t: 'Цаг', fl: 1 },
+    { k: 'date', t: 'Огноо', fl: 1 }, { k: 'times', t: 'Цаг', fl: 1 },
     { k: 'in', t: 'Орсон', num: 1 }, { k: 'out', t: 'Гарсан', num: 1 }, { k: 'back', t: 'Буцсан', num: 1 }, { k: 'pass', t: 'Өнгөрсөн', num: 1 },
-    { k: 'gender', t: 'Хүйс', fl: 1 }, { k: 'h', t: 'Өндөр', num: 1 }, { k: 'age', t: 'Нас', fl: 1 },
-    { k: 'sn', t: 'Төхөөрөмж', fl: 1 }, { k: 'loc', t: 'Байршил', fl: 1 },
+    { k: 'genders', t: 'Хүйс', fl: 1 }, { k: 'h', t: 'Өндөр', num: 1 }, { k: 'ages', t: 'Нас', fl: 1 },
+    { k: 'sns', t: 'Төхөөрөмж', fl: 1 }, { k: 'locs', t: 'Байршил', fl: 1 },
   ];
+  const D_SRV = ['sns', 'locs'];                       // сервер рүү дахин хүсэлт шаардах баганууд
+  const D_GEN = [['male', 'Эрэгтэй'], ['female', 'Эмэгтэй'], ['unknown', 'Тодорхойгүй']];
+  const D_AGE = [['child', '0–16'], ['young', '17–30'], ['adult', '31–45'], ['senior', '46+']];
   const FICO = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5h18l-7 8.2V20l-4 2v-8.8z"/></svg>';
-  const dFresh = () => ({ from: ubDate(-6), to: ubDate(0), sn: '', loc: '', time: '', gender: '', age: '' });
+  const D_LIM = 2000;                                 // сервер эхлээд хамгийн сүүлийн N мөрийг өгнө
+  const dFresh = () => ({ from: ubDate(-6), to: ubDate(0), sns: [], locs: [], times: [], genders: [], ages: [] });
+  // '14:30' → '14:30–15:00'
+  const tLabel = (v) => { const e = new Date(2000, 0, 1, +v.slice(0, 2), +v.slice(3, 5) + 30); return `${v}–${String(e.getHours()).padStart(2, '0')}:${String(e.getMinutes()).padStart(2, '0')}`; };
   const closeFPop = () => document.querySelectorAll('.fpop').forEach((x) => x.remove());
   // Гадуур дарах / ESC → попап хаана (нэг удаа бүртгэнэ)
   document.addEventListener('click', (e) => { if (!e.target.closest('.fpop')) closeFPop(); });
@@ -785,18 +789,19 @@ POST ${O}/api/camera/dup          — өдрийн DUP (realtime + final) тай
     const f = state.dataF || (state.dataF = dFresh());
     const def = dFresh();
     const mine = (arr) => arr.filter((x) => !state.tenantId || String(x.tenant_id) === String(state.tenantId));
-    const devs = () => mine(state.devices).filter((d) => !f.loc || String(d.location_id) === String(f.loc));
+    const devList = () => mine(state.devices).filter((d) => !f.locs.length || f.locs.includes(String(d.location_id)));
     const dm = (v) => v.slice(8, 10) + '.' + v.slice(5, 7);
     const devName = (sn) => { const d = state.devices.find((x) => x.sn === sn); return d ? (d.name || d.sn) : sn; };
     const locName = (id) => { const l = state.locations.find((x) => String(x.id) === String(id)); return l ? l.name : id; };
-    // Идэвхтэй шүүлтүүрийн товч дээр харагдах богино утга ('' бол шүүлтгүй)
+    // Товч дээр харагдах богино утга ('' бол шүүлтгүй)
+    const many = (a, one, w) => (!a.length ? '' : a.length === 1 ? one(a[0]) : `${a.length} ${w}`);
     const vLabel = (k) => {
       if (k === 'date') return (f.from !== def.from || f.to !== def.to) ? `${dm(f.from)}–${dm(f.to)}` : '';
-      if (k === 'sn') return f.sn ? devName(f.sn) : '';
-      if (k === 'loc') return f.loc ? locName(f.loc) : '';
-      if (k === 'gender') return f.gender ? (f.gender === 'male' ? 'Эр' : 'Эм') : '';
-      if (k === 'time') return f.time;
-      return f.age === '' ? '' : f.age + ' нас';
+      if (k === 'sns') return many(f.sns, devName, 'төхөөрөмж');
+      if (k === 'locs') return many(f.locs, locName, 'байршил');
+      if (k === 'times') return many(f.times, tLabel, 'үе');
+      if (k === 'genders') return many(f.genders, (v) => (D_GEN.find((x) => x[0] === v) || [])[1], 'сонголт');
+      return many(f.ages, (v) => (D_AGE.find((x) => x[0] === v) || [])[1], 'бүлэг');
     };
     const btnHtml = (k) => { const v = vLabel(k); return `${FICO}${v ? `<i>${esc(v)}</i>` : ''}`; };
     const th = (c) => `<th class="${c.num ? 'num ' : ''}fh"><span>${c.t}</span>${c.fl ? `<button type="button" class="fbtn${vLabel(c.k) ? ' on' : ''}" data-col="${c.k}" title="${c.t} шүүх" aria-label="${c.t} шүүх">${btnHtml(c.k)}</button>` : ''}</th>`;
@@ -813,16 +818,17 @@ POST ${O}/api/camera/dup          — өдрийн DUP (realtime + final) тай
     const q = () => {
       const p = new URLSearchParams();
       if (state.tenantId) p.set('tenant_id', state.tenantId);
-      if (f.loc) p.set('location_id', f.loc);
-      if (f.sn) p.set('sn', f.sn);
-      p.set('from', f.from + 'T00:00:00+08:00'); p.set('to', f.to + 'T23:59:59+08:00'); p.set('tz', TZ); p.set('limit', 800);
+      if (f.locs.length) p.set('location_id', f.locs.join(','));
+      if (f.sns.length) p.set('sn', f.sns.join(','));
+      p.set('from', f.from + 'T00:00:00+08:00'); p.set('to', f.to + 'T23:59:59+08:00'); p.set('tz', TZ); p.set('limit', D_LIM);
       return '?' + p.toString();
     };
-    const keep = (r) => (f.time === '' || bTime(r.bucket).includes(f.time))
-      && (f.gender === '' || (f.gender === 'male' ? r.male > 0 : r.female > 0))
-      && (f.age === '' || (r.age_min != null && +f.age >= r.age_min && +f.age <= r.age_max));
+    const gVal = (r, g) => (g === 'male' ? r.male : g === 'female' ? r.female : r.gender_unknown) || 0;
+    const keep = (r) => (!f.times.length || f.times.includes(bKey(r.bucket).slice(11, 16)))
+      && (!f.genders.length || f.genders.some((g) => gVal(r, g) > 0))
+      && (!f.ages.length || f.ages.some((a) => (r['age_' + a] || 0) > 0));
     function ctx() {
-      setText('dtCtx', esc([f.loc ? locName(f.loc) : 'Бүх байршил', f.sn ? devName(f.sn) : null, `${dm(f.from)}–${dm(f.to)}`].filter(Boolean).join(' · ')));
+      setText('dtCtx', esc([f.locs.length ? many(f.locs, locName, 'байршил') : 'Бүх байршил', f.sns.length ? many(f.sns, devName, 'төхөөрөмж') : null, `${dm(f.from)}–${dm(f.to)}`].filter(Boolean).join(' · ')));
     }
     function syncBtn(k) {
       const b = $(`.fbtn[data-col="${k}"]`); if (!b) return;
@@ -832,7 +838,7 @@ POST ${O}/api/camera/dup          — өдрийн DUP (realtime + final) тай
       view = rows.filter(keep);
       const s = sumRows(view), cur = curBucketKey();
       setText('dtSum', `<span><b>${fmt(s.in)}</b> орсон</span><span><b>${fmt(s.out)}</b> гарсан</span><span><b>${fmt(s.back)}</b> буцсан</span><span><b>${fmt(s.pass)}</b> өнгөрсөн</span><span><b>${fmt(s.male)}</b> эр · <b>${fmt(s.female)}</b> эм</span><span><b>${s.people ? Math.round(s.hsum / s.people) + ' см' : '—'}</b> дундаж өндөр</span>`);
-      setText('dtCount', `${fmt(view.length)}${view.length !== rows.length ? ' / ' + fmt(rows.length) : ''} мөр · шинэчилсэн ${clockText()}`);
+      setText('dtCount', `${fmt(view.length)}${view.length !== rows.length ? ' / ' + fmt(rows.length) : ''} мөр${rows.length >= D_LIM ? ` · хамгийн сүүлийн ${fmt(D_LIM)}-аар хязгаарласан` : ''} · шинэчилсэн ${clockText()}`);
       const clr = $('#dtClr'); if (clr) clr.hidden = !dirty();
       const html = view.map((r) => {
         const k = bKey(r.bucket), live = k === cur;
@@ -843,7 +849,7 @@ POST ${O}/api/camera/dup          — өдрийн DUP (realtime + final) тай
           <td class="num"><b>${fmt(r.in_count)}</b></td><td class="num">${fmt(r.out_count)}</td><td class="num">${fmt(r.turnback)}</td><td class="num">${fmt(r.passby)}</td>
           <td class="small">${g}</td><td class="num">${r.avg_height_cm ? r.avg_height_cm : '—'}</td><td class="small">${r.age_min != null ? `${r.age_min}–${r.age_max}` : '—'}</td>
           <td class="small">${esc(r.device_name || '(нэргүй)')}<br><span class="mono muted">${esc(r.sn)}</span></td><td class="small">${esc(r.location_name || '—')}</td></tr>`;
-      }).join('') || `<tr><td colspan="11" class="empty">${rows.length ? 'Шүүлтүүрт тохирох мөр алга — гарчиг дээрх нөхцөлөө сулруулна уу.' : 'Энэ хугацаанд өгөгдөл алга. Огнооны шүүлтүүрийг өргөтгөж үзнэ үү.'}</td></tr>`;
+      }).join('') || `<tr><td colspan="11" class="empty">${rows.length ? 'Шүүлтүүрт тохирох мөр алга — гарчиг дээрх сонголтоо цэвэрлэнэ үү.' : 'Энэ хугацаанд өгөгдөл алга. Огнооны шүүлтүүрийг өргөтгөж үзнэ үү.'}</td></tr>`;
       if (html !== lastHtml) { const w = $('#dtWrap'), top = w.scrollTop; $('#dtBody').innerHTML = html; w.scrollTop = top; lastHtml = html; }
     }
     async function tick(force) {
@@ -852,43 +858,55 @@ POST ${O}/api/camera/dup          — өдрийн DUP (realtime + final) тай
       if (state.page !== 'data' || !$('#dtBody')) return;
       rows = d.rows; paint();
     }
-    // ---- Баганын шүүлтүүрийн попап ----
-    const opts = (list, sel) => list.map(([v, t]) => `<option value="${esc(v)}"${String(v) === String(sel) ? ' selected' : ''}>${esc(t)}</option>`).join('');
+    // ---- Баганын шүүлтүүрийн попап: боломжит хувилбарууд + checkbox ----
+    // [утга, нэр, тоо] гурвалуудаас checkbox жагсаалт. Юу ч сонгоогүй = бүгд.
+    const chkList = (k, opts) => `<div class="fchk">${opts.map(([v, t, n]) => `<label><input type="checkbox" data-m="${k}" value="${esc(v)}"${f[k].includes(String(v)) ? ' checked' : ''}><span>${esc(t)}</span>${n == null ? '' : `<i>${fmt(n)}</i>`}</label>`).join('') || '<p class="fhint">Боломжит сонголт алга</p>'}</div>`;
+    const nRows = (fn) => rows.reduce((a, r) => a + (fn(r) ? 1 : 0), 0);
     function popHtml(k) {
       if (k === 'date') return `<h4>Огноо</h4><label>Эхлэх<input type="date" data-f="from" value="${f.from}"></label><label>Дуусах<input type="date" data-f="to" value="${f.to}"></label>`;
-      if (k === 'gender') return `<h4>Хүйс</h4><select data-f="gender">${opts([['', 'Бүгд'], ['male', 'Эрэгтэй байгаа'], ['female', 'Эмэгтэй байгаа']], f.gender)}</select>`;
-      if (k === 'sn') return `<h4>Төхөөрөмж</h4><select data-f="sn">${opts([['', 'Бүгд']].concat(devs().map((d) => [d.sn, d.name || d.sn])), f.sn)}</select>`;
-      if (k === 'loc') return `<h4>Байршил</h4><select data-f="loc">${opts([['', 'Бүгд']].concat(mine(state.locations).map((l) => [l.id, l.name])), f.loc)}</select>`;
-      if (k === 'time') return `<h4>Цаг</h4><input type="text" data-f="time" value="${esc(f.time)}" placeholder="14:" autocomplete="off"><p class="fhint">Жишээ: «14:» → 14:00, 14:30</p>`;
-      return `<h4>Нас</h4><input type="number" min="0" data-f="age" value="${esc(f.age)}" placeholder="25"><p class="fhint">Энэ насыг хамарсан мөрүүд</p>`;
+      if (k === 'times') {
+        const seen = [...new Set(rows.map((r) => bKey(r.bucket).slice(11, 16)))].sort();
+        return `<h4>Цаг</h4>` + chkList(k, seen.map((v) => [v, tLabel(v), nRows((r) => bKey(r.bucket).slice(11, 16) === v)]));
+      }
+      if (k === 'genders') return `<h4>Хүйс</h4>` + chkList(k, D_GEN.map(([v, t]) => [v, t, nRows((r) => gVal(r, v) > 0)]));
+      if (k === 'ages') return `<h4>Насны бүлэг</h4>` + chkList(k, D_AGE.map(([v, t]) => [v, t, nRows((r) => (r['age_' + v] || 0) > 0)]));
+      if (k === 'sns') return `<h4>Төхөөрөмж</h4>` + chkList(k, devList().map((d) => [d.sn, d.name || d.sn, null]));
+      return `<h4>Байршил</h4>` + chkList(k, mine(state.locations).map((l) => [l.id, l.name, null]));
     }
     function openPop(btn) {
       const k = btn.dataset.col, was = $('.fpop');
       closeFPop();
       if (was && was.dataset.col === k) return;
       const el = document.createElement('div');
-      el.className = 'fpop'; el.dataset.col = k;
+      el.className = 'fpop' + (k === 'date' ? '' : ' wide'); el.dataset.col = k;
       el.innerHTML = popHtml(k) + `<div class="fpa"><button type="button" class="btn sm ghost" data-clear>Цэвэрлэх</button><button type="button" class="btn sm" data-close>Хаах</button></div>`;
       document.body.appendChild(el);
-      const r = btn.getBoundingClientRect(), w = el.offsetWidth;
-      el.style.top = Math.min(r.bottom + 6, innerHeight - el.offsetHeight - 10) + 'px';
-      el.style.left = Math.max(10, Math.min(r.left, innerWidth - w - 10)) + 'px';
+      const r = btn.getBoundingClientRect();
+      el.style.top = Math.max(10, Math.min(r.bottom + 6, innerHeight - el.offsetHeight - 10)) + 'px';
+      el.style.left = Math.max(10, Math.min(r.left, innerWidth - el.offsetWidth - 10)) + 'px';
       const first = el.querySelector('input, select'); if (first) setTimeout(() => first.focus(), 20);
-      const apply = (el2) => {
-        f[el2.dataset.f] = el2.value;
-        if (el2.dataset.f === 'loc') { f.sn = ''; syncBtn('sn'); }
-        if (f.from && f.to && f.from > f.to) { const t = f.from; f.from = f.to; f.to = t; el.querySelectorAll('[data-f]').forEach((i) => { if (i.dataset.f === 'from' || i.dataset.f === 'to') i.value = f[i.dataset.f]; }); }
-        syncBtn(k);
-        if (D_SRV.includes(el2.dataset.f)) { ctx(); tick(true); } else paint();
-      };
-      el.addEventListener('input', (e) => { const i = e.target.closest('[data-f]'); if (i && !D_SRV.includes(i.dataset.f)) apply(i); });
-      el.addEventListener('change', (e) => { const i = e.target.closest('[data-f]'); if (i && D_SRV.includes(i.dataset.f)) apply(i); });
+      const after = (srv) => { syncBtn(k); if (srv) { ctx(); tick(true); } else paint(); };
+      el.addEventListener('change', (e) => {
+        const c = e.target.closest('[data-m]');
+        if (c) {
+          const set = new Set(f[k]);
+          if (c.checked) set.add(c.value); else set.delete(c.value);
+          f[k] = [...set];
+          if (k === 'locs') { f.sns = []; syncBtn('sns'); }
+          return after(D_SRV.includes(k));
+        }
+        const i = e.target.closest('[data-f]');
+        if (!i) return;
+        f[i.dataset.f] = i.value;
+        if (f.from && f.to && f.from > f.to) { const t = f.from; f.from = f.to; f.to = t; el.querySelectorAll('[data-f]').forEach((x) => { x.value = f[x.dataset.f]; }); }
+        after(true);
+      });
       el.querySelector('[data-close]').onclick = closeFPop;
       el.querySelector('[data-clear]').onclick = () => {
-        if (k === 'date') { f.from = def.from; f.to = def.to; } else f[k] = '';
-        if (k === 'loc') f.sn = '';
-        syncBtn(k); syncBtn('sn'); closeFPop();
-        if (k === 'date' || k === 'sn' || k === 'loc') { ctx(); tick(true); } else paint();
+        if (k === 'date') { f.from = def.from; f.to = def.to; } else f[k] = [];
+        if (k === 'locs') f.sns = [];
+        syncBtn(k); syncBtn('sns'); closeFPop();
+        after(k === 'date' || D_SRV.includes(k));
       };
     }
     $('#dtHead').onclick = (e) => { const b = e.target.closest('.fbtn'); if (b) { e.stopPropagation(); openPop(b); } };

@@ -4,12 +4,15 @@ const { query, APP_TZ } = require('./db');
 const ONLINE_WINDOW_MIN = 3; // heartbeat минут тутам → 3 минут ирэхгүй бол offline
 const DEFAULT_TZ = APP_TZ;
 
+// Нэг эсвэл олон утгатай тааруулах нөхцөл: массив бол = ANY($n)
+function eqAny(col, v, p) { p.push(v); return `${col} = ${Array.isArray(v) ? 'ANY' : ''}($${p.length})`; }
+
 // Хамрах хүрээний нөхцөл: tenant / байршил / SN
 function scope(f, p) {
   const where = [];
   if (f.tenantId) { p.push(f.tenantId); where.push(`d.tenant_id = $${p.length}`); }
-  if (f.locationId) { p.push(f.locationId); where.push(`d.location_id = $${p.length}`); }
-  if (f.sn) { p.push(f.sn); where.push(`d.sn = $${p.length}`); }
+  if (f.locationId) where.push(eqAny('d.location_id', f.locationId, p));
+  if (f.sn) where.push(eqAny('d.sn', f.sn, p));
   return where.length ? ' AND ' + where.join(' AND ') : '';
 }
 
@@ -168,8 +171,8 @@ async function flowByLocation(f) {
      LEFT JOIN devices d ON d.location_id=l.id
      LEFT JOIN flow_records fr ON fr.sn=d.sn AND fr.data_mode='Add' ${range(f, p, 'fr.ts')}
      WHERE 1=1 ${f.tenantId ? (p.push(f.tenantId), `AND l.tenant_id=$${p.length}`) : ''}
-       ${f.locationId ? (p.push(f.locationId), `AND l.id=$${p.length}`) : ''}
-       ${f.sn ? (p.push(f.sn), `AND EXISTS (SELECT 1 FROM devices x WHERE x.location_id=l.id AND x.sn=$${p.length})`) : ''}
+       ${f.locationId ? 'AND ' + eqAny('l.id', f.locationId, p) : ''}
+       ${f.sn ? `AND EXISTS (SELECT 1 FROM devices x WHERE x.location_id=l.id AND ${eqAny('x.sn', f.sn, p)})` : ''}
      GROUP BY l.id, l.name, t.name ORDER BY in_count DESC`, p);
   return r.rows;
 }

@@ -44,12 +44,20 @@ router.post('/auth/password', auth.requireUser, async (req, res) => {
 router.use(auth.requireUser);
 
 // Шүүлтүүр: tenant хамрах хүрээ + байршил/SN/огноо
+// "a,b,c" → ['a','b','c'] (нэг утга бол өөрөө, хоосон бол null)
+function listParam(v, cast) {
+  if (v == null || v === '') return null;
+  const a = String(v).split(',').map((x) => x.trim()).filter(Boolean).map(cast).filter((x) => x != null && x === x);
+  if (!a.length) return null;
+  return a.length === 1 ? a[0] : a;
+}
+
 function filters(req) {
   const q = req.query;
   return {
     tenantId: auth.tenantScope(req),
-    locationId: q.location_id ? Number(q.location_id) : null,
-    sn: q.sn || null,
+    locationId: listParam(q.location_id, Number),
+    sn: listParam(q.sn, String),
     from: q.from || null,
     to: q.to || null,
     granularity: q.granularity || 'hour',
