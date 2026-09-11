@@ -854,6 +854,7 @@ POST ${O}/api/camera/dup          — өдрийн DUP (realtime + final) тай
   const D_COLS = [
     { k: 'date', t: 'Огноо', fl: 1 }, { k: 'times', t: 'Цаг', fl: 1 },
     { k: 'in', t: 'Орсон', num: 1 }, { k: 'out', t: 'Гарсан', num: 1 }, { k: 'back', t: 'Буцсан', num: 1 }, { k: 'pass', t: 'Өнгөрсөн', num: 1 },
+    { k: 'stay', t: 'Бүсэд байсан', num: 1, tip: 'Тоолох бүсэд байсан дундаж хугацаа — төхөөрөмжийн өөрийн хэмжсэн утга (дэлгүүрт байсан хугацаа биш)' },
     { k: 'genders', t: 'Хүйс', fl: 1 }, { k: 'h', t: 'Өндөр', num: 1 }, { k: 'ages', t: 'Нас', fl: 1 },
     { k: 'sns', t: 'Төхөөрөмж', fl: 1 }, { k: 'locs', t: 'Байршил', fl: 1 },
   ];
@@ -888,7 +889,7 @@ POST ${O}/api/camera/dup          — өдрийн DUP (realtime + final) тай
       return many(f.ages, (v) => (D_AGE.find((x) => x[0] === v) || [])[1], 'бүлэг');
     };
     const btnHtml = (k) => { const v = vLabel(k); return `${FICO}${v ? `<i>${esc(v)}</i>` : ''}`; };
-    const th = (c) => `<th class="${c.num ? 'num ' : ''}fh"><span>${c.t}</span>${c.fl ? `<button type="button" class="fbtn${vLabel(c.k) ? ' on' : ''}" data-col="${c.k}" title="${c.t} шүүх" aria-label="${c.t} шүүх">${btnHtml(c.k)}</button>` : ''}</th>`;
+    const th = (c) => `<th class="${c.num ? 'num ' : ''}fh"${c.tip ? ` title="${esc(c.tip)}"` : ''}><span>${c.t}</span>${c.fl ? `<button type="button" class="fbtn${vLabel(c.k) ? ' on' : ''}" data-col="${c.k}" title="${c.t} шүүх" aria-label="${c.t} шүүх">${btnHtml(c.k)}</button>` : ''}</th>`;
     const dirty = () => D_COLS.some((c) => c.fl && vLabel(c.k));
     $('#page').innerHTML = `
       <div class="live-top"><div class="live-ctx"><span class="pill on"><i class="dot"></i>LIVE</span> <span id="dtCtx"></span></div>
@@ -896,7 +897,7 @@ POST ${O}/api/camera/dup          — өдрийн DUP (realtime + final) тай
       <div class="card section"><div class="head"><h2>30 минутын нэгтгэл</h2><span class="sub" id="dtCount"></span></div>
         <div class="tbl-wrap" id="dtWrap" style="max-height:66vh;overflow:auto">
           <table><thead id="dtHead"><tr>${D_COLS.map(th).join('')}</tr></thead>
-          <tbody id="dtBody"><tr><td colspan="11" class="empty">Ачаалж байна…</td></tr></tbody></table></div></div>`;
+          <tbody id="dtBody"><tr><td colspan="12" class="empty">Ачаалж байна…</td></tr></tbody></table></div></div>`;
     let rows = [], view = [], lastHtml = '';
     const q = () => {
       const p = new URLSearchParams();
@@ -929,9 +930,10 @@ POST ${O}/api/camera/dup          — өдрийн DUP (realtime + final) тай
         return `<tr class="${live ? 'live-row' : ''}">
           <td class="small">${bDate(r.bucket)}</td><td class="mono">${bTime(r.bucket)}${live ? ' <span class="pill on"><i class="dot"></i>одоо</span>' : ''}</td>
           <td class="num"><b>${fmt(r.in_count)}</b></td><td class="num">${fmt(r.out_count)}</td><td class="num">${fmt(r.turnback)}</td><td class="num">${fmt(r.passby)}</td>
+          <td class="num">${dur(r.avg_stay_ms)}</td>
           <td class="small">${g}</td><td class="num">${r.avg_height_cm ? r.avg_height_cm : '—'}</td><td class="small">${r.age_min != null ? `${r.age_min}–${r.age_max}` : '—'}</td>
           <td class="small">${esc(r.device_name || '(нэргүй)')}<br><span class="mono muted">${esc(r.sn)}</span></td><td class="small">${esc(r.location_name || '—')}</td></tr>`;
-      }).join('') || `<tr><td colspan="11" class="empty">${rows.length ? 'Шүүлтүүрт тохирох мөр алга — гарчиг дээрх сонголтоо цэвэрлэнэ үү.' : 'Энэ хугацаанд өгөгдөл алга. Огнооны шүүлтүүрийг өргөтгөж үзнэ үү.'}</td></tr>`;
+      }).join('') || `<tr><td colspan="12" class="empty">${rows.length ? 'Шүүлтүүрт тохирох мөр алга — гарчиг дээрх сонголтоо цэвэрлэнэ үү.' : 'Энэ хугацаанд өгөгдөл алга. Огнооны шүүлтүүрийг өргөтгөж үзнэ үү.'}</td></tr>`;
       if (html !== lastHtml) { const w = $('#dtWrap'), top = w.scrollTop; $('#dtBody').innerHTML = html; w.scrollTop = top; lastHtml = html; }
     }
     async function tick(force) {
@@ -1001,9 +1003,9 @@ POST ${O}/api/camera/dup          — өдрийн DUP (realtime + final) тай
   }
   function exportCsv(rows) {
     if (!rows.length) return toast('Татах өгөгдөл алга', 'info');
-    const head = ['Date', 'Time', 'in', 'out', 'return', 'pass', 'Male', 'Female', 'Unknown', 'Height (cm)', 'Age (range)', 'Device (ID)', 'Device', 'Location'];
+    const head = ['Date', 'Time', 'in', 'out', 'return', 'pass', 'Zone stay (ms)', 'Male', 'Female', 'Unknown', 'Height (cm)', 'Age (range)', 'Device (ID)', 'Device', 'Location'];
     const cell = (v) => String(v == null ? '' : v).replace(/[,;\n]/g, ' ');
-    const lines = [head.join(',')].concat(rows.map((r) => [bDate(r.bucket), bTime(r.bucket), r.in_count, r.out_count, r.turnback, r.passby, r.male || 0, r.female || 0, r.gender_unknown || 0, r.avg_height_cm || '', r.age_min != null ? `${r.age_min}-${r.age_max}` : '', r.sn, cell(r.device_name), cell(r.location_name)].join(',')));
+    const lines = [head.join(',')].concat(rows.map((r) => [bDate(r.bucket), bTime(r.bucket), r.in_count, r.out_count, r.turnback, r.passby, r.avg_stay_ms || 0, r.male || 0, r.female || 0, r.gender_unknown || 0, r.avg_height_cm || '', r.age_min != null ? `${r.age_min}-${r.age_max}` : '', r.sn, cell(r.device_name), cell(r.location_name)].join(',')));
     const blob = new Blob(['﻿' + lines.join('\n')], { type: 'text/csv;charset=utf-8' });
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `footfall_${ubDate()}.csv`; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
     toast(`${fmt(rows.length)} мөр татагдлаа`);
