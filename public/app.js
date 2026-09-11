@@ -204,6 +204,21 @@
       ctx.restore();
     },
   };
+  // Цагирагны хоосон төвд нийт тоог бичнэ. Нийлбэрийг өөрөө өгөгдлөөс тооцдог тул
+  // шинэчлэлт бүрт тусад нь дамжуулах шаардлагагүй.
+  const donutCenter = {
+    id: 'donutCenter',
+    afterDatasetsDraw(c, a, o) {
+      const ds = c.data.datasets[0]; if (!ds) return;
+      const total = ds.data.reduce((x, y) => x + (y || 0), 0);
+      const { ctx, chartArea } = c, cx = (chartArea.left + chartArea.right) / 2, cy = (chartArea.top + chartArea.bottom) / 2;
+      ctx.save(); ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
+      ctx.fillStyle = css('--text'); ctx.font = `700 21px ${Chart.defaults.font.family}`;
+      ctx.fillText(fmt(total), cx, cy + 3);
+      if (o.sub) { ctx.fillStyle = css('--muted'); ctx.font = `500 11px ${Chart.defaults.font.family}`; ctx.fillText(o.sub, cx, cy + 19); }
+      ctx.restore();
+    },
+  };
   const barValues = {
     id: 'barValues',
     afterDatasetsDraw(c, a, o) {
@@ -293,13 +308,15 @@
               <button type="button" id="umPw">Нууц үг солих</button><button type="button" class="danger" id="umOut">Гарах</button></div></div>
         </div>
         <div class="toolbar" id="globalFilters">
-          ${isSuper ? `<label class="fld"><span>Байгууллага</span><select id="fTenant"><option value="">Бүх байгууллага</option>${state.tenants.map((t) => `<option value="${t.id}" ${String(t.id) === String(state.tenantId) ? 'selected' : ''}>${esc(t.name)}</option>`).join('')}</select></label>` : ''}
-          <label class="fld"><span>Байршил</span><select id="fLocation"></select></label>
-          <label class="fld"><span>Төхөөрөмж</span><select id="fDevice"></select></label>
-          <div class="fld range"><span>Хугацаа</span><div class="filters"><div class="seg" id="fRange">${[['today', 'Өнөөдөр'], ['7d', '7 хоног'], ['30d', '30 хоног'], ['90d', '90 хоног'], ['custom', 'Сонгох']].map(([k, t]) => `<button data-r="${k}" class="${state.range === k ? 'active' : ''}">${t}</button>`).join('')}</div>
-            <span id="customRange" class="filters" ${state.range === 'custom' ? '' : 'hidden'}><input type="date" id="fFrom" value="${state.from}"> – <input type="date" id="fTo" value="${state.to}"></span></div></div>
+          ${isSuper ? `<select id="fTenant" aria-label="Байгууллага"><option value="">Бүх байгууллага</option>${state.tenants.map((t) => `<option value="${t.id}" ${String(t.id) === String(state.tenantId) ? 'selected' : ''}>${esc(t.name)}</option>`).join('')}</select>` : ''}
+          <select id="fLocation" aria-label="Байршил"></select>
+          <select id="fDevice" aria-label="Төхөөрөмж"></select>
+          <div class="seg" id="fRange">${[['today', 'Өнөөдөр'], ['7d', '7 хоног'], ['30d', '30 хоног'], ['90d', '90 хоног'], ['custom', 'Сонгох']].map(([k, t]) => `<button data-r="${k}" class="${state.range === k ? 'active' : ''}">${t}</button>`).join('')}</div>
+          <span id="customRange" class="filters" ${state.range === 'custom' ? '' : 'hidden'}><input type="date" id="fFrom" value="${state.from}"> – <input type="date" id="fTo" value="${state.to}"></span>
           <div class="grow"></div>
-          <div class="fld upd"><span id="lastUpd" class="muted small"></span><button class="btn" id="refreshBtn" aria-label="Өгөгдөл шинэчлэх"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.6-6.4M21 3v6h-6"/></svg> Шинэчлэх</button></div>
+          <span id="lastUpd" class="muted small"></span>
+          <button class="btn icon" id="fsBtn" title="Бүтэн дэлгэц — TV/монитор дээр тавихад (гарахдаа Esc)" aria-label="Бүтэн дэлгэц">⛶</button>
+          <button class="btn" id="refreshBtn" aria-label="Өгөгдөл шинэчлэх"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.6-6.4M21 3v6h-6"/></svg> Шинэчлэх</button>
         </div>
         <div class="content"><div id="page"></div></div>
       </main></div>`;
@@ -315,6 +332,7 @@
     $('#fRange').onclick = (e) => { const b = e.target.closest('button'); if (!b) return; state.range = b.dataset.r; [...$('#fRange').children].forEach((x) => x.classList.toggle('active', x === b)); $('#customRange').hidden = state.range !== 'custom'; if (state.range !== 'custom') render(); };
     $('#fFrom').onchange = $('#fTo').onchange = () => { state.from = $('#fFrom').value; state.to = $('#fTo').value; if (state.from && state.to) render(); };
     $('#refreshBtn').onclick = () => render();
+    $('#fsBtn').onclick = toggleFs;
     window.onhashchange = () => render();
   }
   const roleName = (r) => ({ superadmin: 'Супер админ', admin: 'Админ', viewer: 'Үзэгч' }[r] || r);
@@ -989,15 +1007,13 @@ POST ${O}/api/camera/dup          — өдрийн DUP (realtime + final) тай
   async function pageDashboard() {
     if (!state.devices.length) return renderOnboarding();
     $('#page').innerHTML = `
-      <div class="live-top"><div class="live-ctx"><span class="pill on"><i class="dot"></i>LIVE</span> <span id="dbCtx">${esc(contextLabel())}</span></div>
-        <div class="live-actions"><span class="live-clock" id="dbClock"></span><button class="btn" id="dbFs" title="TV/монитор дээр тавихад">⛶ Бүтэн дэлгэц</button></div></div>
       <div id="dbNotice"></div>
       <div class="grid g-kpi hero" id="dbKpi"></div>
       <div class="card section"><div class="head"><h2>Урсгал — 30 минутаар</h2><span class="sub" id="dbFlowSub"></span></div><div class="chart-wrap"><canvas id="cFlow30"></canvas></div></div>
       <div class="card section"><div class="head"><h2>Зочны бүтэц</h2><span class="sub" id="dbProfSub"></span></div>
         <div class="grid g-3">
-          <div class="prof"><h3>Хүйс <span class="sub muted" id="dbGenSub"></span></h3>
-            <div class="chart-wrap bar1"><canvas id="cGender"></canvas></div>
+          <div class="prof"><h3>Хүйс</h3>
+            <div class="chart-wrap donut"><canvas id="cGender"></canvas></div>
             <div class="legend" style="margin-top:10px" id="dbGenLegend"></div></div>
           <div class="prof"><h3>Насны бүлэг <span class="sub muted" id="dbAgeSub"></span></h3>
             <div class="chart-wrap bar6"><canvas id="cAge"></canvas></div></div>
@@ -1005,8 +1021,6 @@ POST ${O}/api/camera/dup          — өдрийн DUP (realtime + final) тай
             <div class="chart-wrap bar5"><canvas id="cHeight"></canvas></div></div>
         </div></div>
       <div class="card section"><div class="head"><h2>Долоо хоногийн өдөр × цаг</h2><span class="sub">орсон хүний нягтрал</span></div><div id="heat"></div></div>`;
-    $('#dbFs').onclick = toggleFs;
-    const clock = () => setText('dbClock', clockText());
     let prev = null, heatDone = false;
     async function tick() {
       if (document.hidden || state.page !== 'dashboard') return;
@@ -1024,7 +1038,6 @@ POST ${O}/api/camera/dup          — өдрийн DUP (realtime + final) тай
       if (state.page !== 'dashboard' || !$('#dbKpi')) return;
       const t = ov.totals, s = sumRows(data.rows);
       const online = ov.by_device.filter((d) => d.online).length, total = ov.by_device.length, offline = total - online;
-      setText('dbCtx', esc(contextLabel()));
       setText('dbNotice', offline ? `<div class="notice warn"><b>${offline} төхөөрөмж offline</b> — тоо дутуу байж болзошгүй. <a href="#devices">Төхөөрөмж хуудсанд шалгах →</a></div>` : '');
       setText('dbKpi', [
         kpi({ label: 'Орсон', value: fmt(t.in_count), delta: { cur: t.in_count, prev: prev.in_count }, ico: 'in', c: 1, accent: true }),
@@ -1057,21 +1070,13 @@ POST ${O}/api/camera/dup          — өдрийн DUP (realtime + final) тай
       }
       const gTotal = s.male + s.female + s.unknown;
       setText('dbProfSub', gTotal ? `${fmt(gTotal)} зочны танигдсан шинж` : 'өгөгдөл алга');
-      setText('dbGenSub', gTotal ? `${fmt(gTotal)} зочин` : 'өгөгдөл алга');
       setText('dbGenLegend', `<span style="--c:var(--c1)">Эр ${fmt(s.male)} (${pct(s.male, gTotal)})</span><span style="--c:var(--c4)">Эм ${fmt(s.female)} (${pct(s.female, gTotal)})</span>${s.unknown ? `<span style="--c:var(--c-ctx)">Тодорхойгүй ${fmt(s.unknown)}</span>` : ''}`);
-      // Бүхэлд эзлэх хувь → хэвтээ давхарласан багана. Цагираг нь ойролцоо хоёр утгыг
-      // (эр/эм ойролцоо гардаг) харьцуулахад муу; нэрс, тоо нь доорх тайлбарт бүтнээрээ байна.
-      if (!setChart('cGender', null, [[s.male], [s.female], [s.unknown]])) {
-        const gap = { borderColor: css('--surface'), borderWidth: 1, borderRadius: 4, borderSkipped: false, maxBarThickness: 30 };
-        mk('cGender', { type: 'bar', data: { labels: [''], datasets: [
-          { label: 'Эрэгтэй', data: [s.male], backgroundColor: css('--c1'), ...gap },
-          { label: 'Эмэгтэй', data: [s.female], backgroundColor: css('--c4'), ...gap },
-          { label: 'Тодорхойгүй', data: [s.unknown], backgroundColor: css('--c-ctx'), ...gap },
-        ] },
-          options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, animation: false,
-            // max = нийлбэр: багана савныхаа бүтэн өргөнийг эзэлж, сегментүүд шууд хувь болж уншигдана
-            scales: { x: { stacked: true, display: false, min: 0, max: gTotal || 1 }, y: { stacked: true, display: false } },
-            plugins: { legend: { display: false }, tooltip: { displayColors: true } } } });
+      // Сегмент хооронд 2px гадаргууны завсар; нэр, тоо, хувь нь доорх тайлбарт бүтнээрээ
+      if (!setChart('cGender', null, [[s.male, s.female, s.unknown]])) {
+        mk('cGender', { type: 'doughnut', data: { labels: ['Эрэгтэй', 'Эмэгтэй', 'Тодорхойгүй'],
+          datasets: [{ data: [s.male, s.female, s.unknown], backgroundColor: [css('--c1'), css('--c4'), css('--c-ctx')], borderWidth: 2, borderColor: css('--surface'), hoverOffset: 4 }] },
+          options: { responsive: true, maintainAspectRatio: false, animation: false, cutout: '68%', plugins: { legend: { display: false }, donutCenter: { sub: 'зочин' } } },
+          plugins: [donutCenter] });
       }
       // Нас, өндөр: эрэмбэтэй бүлэг тул нэг өнгийн шатлал (цайнаас бараан) — өөр өөр өнгө
       // өгвөл баганын уртыг өнгөөр давхар кодолж, өнгө нь утгагүй болно. «Тодорхойгүй» нь
@@ -1099,8 +1104,8 @@ POST ${O}/api/camera/dup          — өдрийн DUP (realtime + final) тай
       setText('dbHgtSub', hTotal ? `${fmt(hTotal)} зочин · дундаж ${s.people ? Math.round(s.hsum / s.people) : '—'} см` : 'өгөгдөл алга');
       const lu = $('#lastUpd'); if (lu) lu.textContent = 'Шинэчилсэн ' + clockText();
     }
-    clock(); await tick();
-    state.liveTimers = [setInterval(tick, 10000), setInterval(clock, 1000)];
+    await tick();
+    state.liveTimers = [setInterval(tick, 10000)];
   }
 
   const PAGES = { admin: pageAdmin, dashboard: pageDashboard, data: pageData, devices: pageDevices, reid: pageReid, settings: pageSettings };

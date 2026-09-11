@@ -78,12 +78,10 @@ h1 { font-size: 20px; line-height: 1.25; } h2 { font-size: 14.5px; } h3 { font-s
 .topbar .page-sub { margin: 1px 0 0; color: var(--muted); font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .topbar .filters { order: 1; }
 .topbar .umenu { order: 2; }
-.toolbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; padding: 14px 28px 0; }
-.fld { display: grid; gap: 4px; }
-.fld > span { font-size: 10.5px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); font-weight: 600; }
+.toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 14px 28px 0; }
+.toolbar > select { max-width: 190px; }
 .toolbar .grow { flex: 1; }
-.toolbar .upd { display: flex; flex-direction: row; align-items: center; gap: 10px; }
-.toolbar .upd > span { text-transform: none; letter-spacing: 0; font-size: 12px; font-weight: 500; }
+.toolbar #lastUpd { font-variant-numeric: tabular-nums; }
 .content { padding: 18px 28px 48px; }
 /* Анхааруулга мөр (offline төхөөрөмж г.м.) */
 .notice { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; padding: 10px 14px; border-radius: 10px; margin-bottom: 14px; font-size: 13px; border: 1px solid transparent; }
@@ -192,7 +190,7 @@ input::placeholder { color: var(--muted); }
 .kpi.accent::after { content: ""; position: absolute; inset: 0 0 auto 0; height: 3px; border-radius: var(--radius) var(--radius) 0 0; background: linear-gradient(90deg, #3b82f6, #8b5cf6); }
 .chart-wrap { position: relative; height: 300px; }
 .chart-wrap.sm { height: 220px; }
-.chart-wrap.bar1 { height: 56px; }   /* нэг хэвтээ хураангуй багана */
+.chart-wrap.donut { height: 168px; }
 .chart-wrap.bar5 { height: 152px; }  /* 5 хэвтээ багана */
 .chart-wrap.bar6 { height: 178px; }  /* 6 хэвтээ багана */
 /* Зочны бүтэц: хүйс / нас / өндөр гурван багана */
@@ -361,7 +359,7 @@ th.fh > span { vertical-align: middle; }
   .nav a.active::before { display: none; } .nav a.active { box-shadow: none; }
   .nav a svg { width: 20px; height: 20px; }
   .topbar { padding: 12px 14px; } .toolbar { padding: 12px 14px 0; } .content { padding: 14px 14px 92px; }
-  .toolbar .fld { flex: 1 1 140px; } .toolbar .fld select { width: 100%; max-width: none; } .toolbar .fld.range { flex-basis: 100%; }
+  .toolbar > select { flex: 1 1 140px; max-width: none; } .toolbar .seg { flex-basis: 100%; }
   .topbar h1 { font-size: 18px; }
   .card { padding: 14px; border-radius: 12px; }
   .tbl-wrap { margin: 0 -14px; padding: 0 14px; }
