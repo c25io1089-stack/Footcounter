@@ -211,7 +211,6 @@
   const NAV_TENANT = [
     ['dashboard', 'Хяналтын самбар', 'M3 13h8V3H3v10zm10 8h8V11h-8v10zM3 21h8v-6H3v6zm10-18v6h8V3h-8z', 'Урсгал, зочны бүтэц — бодит цагт (10 сек тутам)'],
     ['data', 'Өгөгдөл', 'M3 4h18v4H3V4zm0 6h8v4H3v-4zm10 0h8v4h-8v-4zM3 16h8v4H3v-4zm10 0h8v4h-8v-4z', '30 минутын нэгтгэл — орсон, гарсан, нас, хүйс, өндөр'],
-    ['locations', 'Байршил', 'M12 2C8.1 2 5 5.1 5 9c0 5.3 7 13 7 13s7-7.7 7-13c0-3.9-3.1-7-7-7zm0 9.5a2.5 2.5 0 110-5 2.5 2.5 0 010 5z', 'Байршил бүрийн урсгал, орох хувь, төхөөрөмжийн төлөв'],
     ['devices', 'Төхөөрөмж', 'M4 6h16v10H4zM2 18h20v2H2z', 'Online/offline төлөв, холболт, firmware, тохиргоо'],
     ['reid', 'Давхардалгүй зочид', 'M12 4a4 4 0 110 8 4 4 0 010-8zm0 10c4.4 0 8 1.8 8 4v2H4v-2c0-2.2 3.6-4 8-4z', 'REID-ээр танигдсан давхардалгүй зочид, давтан ирэлт, байх хугацаа'],
     ['settings', 'Тохиргоо', 'M19.4 13a7.7 7.7 0 000-2l2.1-1.6-2-3.5-2.5 1a7.4 7.4 0 00-1.7-1L15 3H9l-.4 2.7a7.4 7.4 0 00-1.7 1l-2.5-1-2 3.5L4.6 11a7.7 7.7 0 000 2l-2.1 1.6 2 3.5 2.5-1c.5.4 1.1.7 1.7 1L9 21h6l.4-2.7c.6-.3 1.2-.6 1.7-1l2.5 1 2-3.5L19.4 13zM12 15.5a3.5 3.5 0 110-7 3.5 3.5 0 010 7z', 'Байршил, хэрэглэгч, API түлхүүр, API баримт'],
@@ -356,25 +355,6 @@
     let h = '<div class="heat"><div></div>' + [...Array(24)].map((_, i) => `<div class="h">${i}</div>`).join('');
     for (let d = 1; d <= 7; d++) { h += `<div class="d">${DOW[d - 1]}</div>`; for (let i = 0; i < 24; i++) { const v = m[d + '_' + i] || 0; h += `<div class="c" title="${DOW[d - 1]} ${i}:00 — ${fmt(v)} хүн" style="opacity:${v ? (0.15 + 0.85 * v / max).toFixed(2) : 0.04}"></div>`; } }
     $('#heat').innerHTML = h + '</div>' + `<div class="heat-legend"><span>бага</span><i></i><span>их (${fmt(max)} хүн/цаг)</span></div>`;
-  }
-
-  // ================= LOCATIONS =================
-  async function pageLocations() {
-    const g = gran();
-    const [byLoc, series] = await Promise.all([api('/dash/flow/totals' + qs()), api('/dash/overview' + qs({ granularity: g }))]);
-    const locs = series.by_location;
-    $('#page').innerHTML = `<div class="stack">
-      <div class="card"><div class="head"><h2>Байршлын харьцуулалт</h2><span class="sub">сонгосон хугацаанд</span></div><div class="chart-wrap sm"><canvas id="cLoc"></canvas></div></div>
-      <div class="card"><div class="tbl-wrap"><table><thead><tr><th>Байршил</th><th>Байгууллага</th><th class="num">Орсон</th><th class="num">Гарсан</th><th class="num">Өнгөрсөн</th><th class="num">Буцсан</th><th class="num">Орох хувь</th><th>Төхөөрөмж</th><th></th></tr></thead><tbody>
-        ${locs.map((l) => `<tr><td><b>${esc(l.location_name)}</b></td><td>${esc(l.tenant_name)}</td><td class="num">${fmt(l.in_count)}</td><td class="num">${fmt(l.out_count)}</td><td class="num">${fmt(l.passby)}</td><td class="num">${fmt(l.turnback)}</td><td class="num">${pct(l.in_count, l.in_count + l.passby)}</td>
-          <td><span class="pill ${l.online_count === l.device_count && l.device_count ? 'on' : l.device_count ? 'warn' : 'na'}"><i class="dot"></i>${l.online_count}/${l.device_count} online</span></td>
-          <td><button class="btn sm" data-loc="${l.location_id}">Дэлгэрэнгүй</button></td></tr>`).join('') || '<tr><td colspan="9" class="empty">Байршил бүртгээгүй. Тохиргоо хэсгээс нэмнэ үү.</td></tr>'}
-      </tbody></table></div></div></div>`;
-    $('#page').onclick = (e) => { const b = e.target.closest('[data-loc]'); if (b) { state.locationId = b.dataset.loc; state.sn = ''; fillLocationSelects(); location.hash = '#overview'; } };
-    mk('cLoc', { type: 'bar', data: { labels: locs.map((l) => l.location_name), datasets: [
-      { label: 'Орсон', data: locs.map((l) => l.in_count), backgroundColor: css('--s1'), borderRadius: 4 },
-      { label: 'Өнгөрсөн', data: locs.map((l) => l.passby), backgroundColor: css('--s3'), borderRadius: 4 }] },
-      options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, scales: { x: { beginAtZero: true, grid: { color: css('--border') } }, y: { grid: { display: false } } }, plugins: { legend: { position: 'top', align: 'end' } } } });
   }
 
   // ================= DEVICES =================
@@ -850,7 +830,7 @@ POST ${O}/api/camera/dup          — өдрийн DUP (realtime + final) тай
     state.liveTimers = [setInterval(tick, 10000), setInterval(clock, 1000)];
   }
 
-  const PAGES = { admin: pageAdmin, dashboard: pageDashboard, data: pageData, locations: pageLocations, devices: pageDevices, reid: pageReid, settings: pageSettings };
+  const PAGES = { admin: pageAdmin, dashboard: pageDashboard, data: pageData, devices: pageDevices, reid: pageReid, settings: pageSettings };
 
   // Superadmin самбарыг 60 сек тутам (бусад хуудас өөрийн таймертай)
   setInterval(() => { if (state.user && state.page === 'admin' && !document.hidden && !document.querySelector('.modal-bg')) render(); }, 60000);
