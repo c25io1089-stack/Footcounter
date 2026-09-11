@@ -79,7 +79,28 @@ async function flowTotals(f) {
   const s = await query(
     `SELECT count(*)::int AS stay_count FROM person_events pe JOIN devices d ON d.sn=pe.sn
      WHERE pe.event_type=1 AND pe.stay_time_ms >= $1 ${scope(f, p2)} ${range(f, p2, 'pe.ts')}`, p2);
-  return { ...r.rows[0], stay_count: s.rows[0].stay_count, stay_threshold_ms: STAY_THRESHOLD_MS };
+  // Дэлгүүрт байсан хугацаа (орсноос гарах хүртэл): 1) REID тайлангийн орох–гарах хос (нарийн, өдрийн эцэст ирдэг),
+  // 2) байхгүй бол ижил хүний (sn, id_index) орох(0)→гарах(1) үйл явдлын цагийн зөрүү (12 цагаас бага, эерэг)
+  const p3 = [];
+  const reid = await query(
+    `SELECT count(*)::int AS n, coalesce(avg(rp.total_dwell_ms),0)::bigint AS avg_ms
+     FROM reid_persons rp JOIN devices d ON d.sn=rp.master_sn
+     WHERE coalesce(rp.person_type,0)=0 AND rp.total_dwell_ms > 0 ${scope(f, p3)} ${dateRange(f, p3, 'rp.report_date')}`, p3);
+  let dwell = { n: reid.rows[0].n, avg_ms: Number(reid.rows[0].avg_ms), source: 'reid' };
+  if (!dwell.n) {
+    const p4 = [];
+    const ev = await query(
+      `WITH e AS (
+         SELECT pe.sn, pe.id_index, min(pe.ts) FILTER (WHERE pe.event_type=0) AS t_in, max(pe.ts) FILTER (WHERE pe.event_type=1) AS t_out
+         FROM person_events pe JOIN devices d ON d.sn=pe.sn
+         WHERE pe.id_index IS NOT NULL AND coalesce(pe.workcard,0)=0 ${scope(f, p4)} ${range(f, p4, 'pe.ts')}
+         GROUP BY pe.sn, pe.id_index)
+       SELECT count(*)::int AS n, coalesce(avg(extract(epoch FROM (t_out - t_in)) * 1000),0)::bigint AS avg_ms
+       FROM e WHERE t_in IS NOT NULL AND t_out IS NOT NULL AND t_out > t_in AND t_out - t_in < interval '12 hours'`, p4);
+    dwell = { n: ev.rows[0].n, avg_ms: Number(ev.rows[0].avg_ms), source: ev.rows[0].n ? 'events' : null };
+  }
+  return { ...r.rows[0], stay_count: s.rows[0].stay_count, stay_threshold_ms: STAY_THRESHOLD_MS,
+    store_dwell_ms: dwell.avg_ms, store_dwell_n: dwell.n, store_dwell_source: dwell.source };
 }
 const STAY_THRESHOLD_MS = Number(process.env.STAY_THRESHOLD_MS || 5000);
 

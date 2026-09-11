@@ -18,6 +18,8 @@
     return Math.floor(s / 86400) + ' өдрийн өмнө';
   };
   const dur = (ms) => { if (!ms) return '—'; const s = Math.round(ms / 1000); return s < 60 ? s + ' сек' : s < 3600 ? Math.round(s / 60) + ' мин' : (s / 3600).toFixed(1) + ' цаг'; };
+  // «1 ц 20 мин» / «45 мин» / «30 сек» — дэлгүүрт байсан хугацаанд
+  const durLong = (ms) => { if (!ms) return '—'; const s = Math.round(ms / 1000); if (s < 60) return s + ' сек'; const h = Math.floor(s / 3600), m = Math.round((s % 3600) / 60); return h ? `${h} ц ${m} мин` : `${m} мин`; };
   const AGE_LABEL = { '0_9': '0–9', '10_16': '10–16', '17_30': '17–30', '31_45': '31–45', '46_60': '46–60', '61_plus': '61+', unknown: 'Тодорхойгүй' };
   const AGE_ORDER = ['0_9', '10_16', '17_30', '31_45', '46_60', '61_plus', 'unknown'];
   const DOW = ['Да', 'Мя', 'Лх', 'Пү', 'Ба', 'Бя', 'Ня'];
@@ -356,7 +358,7 @@
         ${kpi({ label: 'Гарсан', value: fmt(t.out_count), delta: { cur: t.out_count, prev: prev.out_count }, ico: 'out', c: 2, spark: ov.series.map((s) => s.out_count) })}
         ${kpi({ label: 'Өнгөрсөн', value: fmt(t.passby), delta: { cur: t.passby, prev: prev.passby }, ico: 'pass', c: 4, spark: ov.series.map((s) => s.passby) })}
         ${kpi({ label: 'Буцсан', value: fmt(t.turnback), delta: { cur: t.turnback, prev: prev.turnback }, ico: 'back', c: 5, spark: ov.series.map((s) => s.turnback) })}
-        ${kpi({ label: 'Байх', value: fmt(t.stay_count || 0), sub: `${Math.round((t.stay_threshold_ms || 5000) / 1000)} сек+ зогссон · дундаж ${dur(t.avg_stay_ms)}`, ico: 'clock', c: 7 })}
+        ${kpi({ label: 'Байх хугацаа', value: t.store_dwell_n ? durLong(t.store_dwell_ms) : '—', delta: t.store_dwell_n && prev.store_dwell_n ? { cur: t.store_dwell_ms, prev: prev.store_dwell_ms } : null, sub: t.store_dwell_n ? `${fmt(t.store_dwell_n)} зочин · орсноос гарах хүртэл${t.store_dwell_source === 'reid' ? ' (REID)' : ''}` : 'орсон–гарсан хос хараахан алга', ico: 'clock', c: 7 })}
       </div>
       <div class="stats"><span><b>${fmt(ov.occupancy.total)}</b> одоо дотор байгаа</span><span><b>${pct(t.in_count, t.in_count + t.passby)}</b> орох хувь</span><span><b>${online}/${total}</b> төхөөрөмж online</span></div>
       <div class="grid g-2 section">
