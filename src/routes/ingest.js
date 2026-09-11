@@ -112,6 +112,7 @@ async function dataUpload(req, res) {
     const fix = (v) => { const d = toDate(v); return d ? new Date(d.getTime() + skewMs) : null; }; // төхөөрөмжийн цагийг зөрүүгээр засна
     await client.query('BEGIN');
 
+    let attrStored = null;   // хэдэн attribute үнэхээр хадгалагдсаныг Лог цонхонд харуулна
     const isResidence = b.currentStay !== undefined || Array.isArray(b.info);
     const isFlow = b.in !== undefined || b.out !== undefined || b.startTime !== undefined;
 
@@ -138,22 +139,24 @@ async function dataUpload(req, res) {
       );
 
       const attrs = Array.isArray(b.attributes) ? b.attributes : [];
+      attrStored = 0;
       for (const a of attrs) {
         const age = Array.isArray(a.age) ? a.age : [null, null];
         const ageMin = age[0] === 255 ? null : age[0];
         const ageMax = age[1] === 255 ? null : age[1];
-        await client.query(
+        const ins = await client.query(
           `INSERT INTO person_events(sn, id_index, person_id, ts, event_type, stay_time_ms, height_cm, gender, age_min, age_max, workcard, wheelchair)
            VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
            ON CONFLICT (sn, id_index, ts, event_type) DO NOTHING`,
           [sn, a.idIndex ?? null, a.personId ?? null, fix(a.timeStamp) || ts, Number(a.eventType) || 0,
             a.stayTime ?? null, a.height ?? null, a.gender ?? null, ageMin, ageMax, a.workcard ?? 0, a.wheelchair ?? 0]
         );
+        attrStored += ins.rowCount;   // 0 = ижил (sn,idIndex,ts,eventType)-тэй мөр аль хэдийн байсан тул алгассан
       }
     }
 
     // Сүүлийн body-г (attributes-ийн эхний 5) хадгална — бодит форматыг dashboard-ын Лог цонхноос харна
-    const sample = { ...scrub(b), attributes: Array.isArray(b.attributes) ? b.attributes.slice(0, 5) : b.attributes, _attributes_total: Array.isArray(b.attributes) ? b.attributes.length : undefined, _received_at: new Date().toISOString() };
+    const sample = { ...scrub(b), attributes: Array.isArray(b.attributes) ? b.attributes.slice(0, 5) : b.attributes, _attributes_total: Array.isArray(b.attributes) ? b.attributes.length : undefined, _attributes_stored: attrStored, _received_at: new Date().toISOString() };
     await client.query('UPDATE devices SET last_data_at=now(), last_upload=$2 WHERE sn=$1', [sn, JSON.stringify(sample).slice(0, 20000)]);
     await client.query('COMMIT');
     res.json({ code: 0, msg: 'Report submitted successfully', data: { sn, time: nowSec() } });

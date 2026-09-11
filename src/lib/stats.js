@@ -83,14 +83,17 @@ async function dataBuckets(f) {
      FROM flow_records fr JOIN devices d ON d.sn=fr.sn LEFT JOIN locations l ON l.id=d.location_id
      WHERE fr.data_mode='Add' ${scope(f, p)} ${range(f, p, 'fr.ts')}
      GROUP BY 1,2,3,4 ORDER BY 1 DESC LIMIT ${limit}`, p);
-  // Зочны бүтэц: хүн бүрийг (sn, id_index) нэг удаа — мэдээлэл илүүтэй мөрөөр (ихэвчлэн гарах үйл явдал)
+  // Зочны бүтэц: хүн бүрийг нэг удаа — мэдээлэл илүүтэй мөрөөр (ихэвчлэн гарах үйл явдал).
+  // Түлхүүрт ӨДРИЙГ заавал оруулна: төхөөрөмжийн id_index нь глобал биш, өдөр бүр (эсвэл
+  // асаах бүрт) шинээр эхэлдэг тул зөвхөн (sn, id_index)-ээр бүлэглэвэл өөр өдрийн өөр
+  // хүмүүс нэг болж нийлээд, тоо нь төхөөрөмжийн өгснөөс дутуу гарна.
   const p2 = [tz];
   const demo = await query(
     `WITH person AS (
-       SELECT DISTINCT ON (pe.sn, coalesce(pe.id_index, pe.id)) pe.sn, pe.ts, pe.gender, pe.age_min, pe.age_max, pe.height_cm, pe.workcard, pe.wheelchair
+       SELECT DISTINCT ON (pe.sn, (pe.ts AT TIME ZONE $1)::date, coalesce(pe.id_index, pe.id)) pe.sn, pe.ts, pe.gender, pe.age_min, pe.age_max, pe.height_cm, pe.workcard, pe.wheelchair
        FROM person_events pe JOIN devices d ON d.sn=pe.sn
        WHERE pe.event_type IN (0,1) ${scope(f, p2)} ${range(f, p2, 'pe.ts')}
-       ORDER BY pe.sn, coalesce(pe.id_index, pe.id),
+       ORDER BY pe.sn, (pe.ts AT TIME ZONE $1)::date, coalesce(pe.id_index, pe.id),
          (CASE WHEN pe.gender IN (1,2) THEN 0 ELSE 1 END), (CASE WHEN pe.age_min IS NULL THEN 1 ELSE 0 END), pe.event_type DESC, pe.ts DESC
      )
      SELECT ${B('pp.ts')} AS bucket, pp.sn,
@@ -141,7 +144,8 @@ async function flowTotals(f) {
     `SELECT count(*)::int AS stay_count FROM person_events pe JOIN devices d ON d.sn=pe.sn
      WHERE pe.event_type=1 AND pe.stay_time_ms >= $1 ${scope(f, p2)} ${range(f, p2, 'pe.ts')}`, p2);
   // Дэлгүүрт байсан хугацаа (орсноос гарах хүртэл): 1) REID тайлангийн орох–гарах хос (нарийн, өдрийн эцэст ирдэг),
-  // 2) байхгүй бол ижил хүний (sn, id_index) орох(0)→гарах(1) үйл явдлын цагийн зөрүү (12 цагаас бага, эерэг)
+  // 2) байхгүй бол ижил хүний орох(0)→гарах(1) үйл явдлын цагийн зөрүү (12 цагаас бага, эерэг).
+  //    Энд ч мөн адил өдрөөр нь бүлэглэнэ — өөр өдрийн орох/гарахыг хооронд нь хослуулахгүй.
   const p3 = [];
   const reid = await query(
     `SELECT count(*)::int AS n, coalesce(avg(rp.total_dwell_ms),0)::bigint AS avg_ms
@@ -149,13 +153,13 @@ async function flowTotals(f) {
      WHERE coalesce(rp.person_type,0)=0 AND rp.total_dwell_ms > 0 ${scope(f, p3)} ${dateRange(f, p3, 'rp.report_date')}`, p3);
   let dwell = { n: reid.rows[0].n, avg_ms: Number(reid.rows[0].avg_ms), source: 'reid' };
   if (!dwell.n) {
-    const p4 = [];
+    const p4 = [f.tz || DEFAULT_TZ];   // $1 = цагийн бүс
     const ev = await query(
       `WITH e AS (
          SELECT pe.sn, pe.id_index, min(pe.ts) FILTER (WHERE pe.event_type=0) AS t_in, max(pe.ts) FILTER (WHERE pe.event_type=1) AS t_out
          FROM person_events pe JOIN devices d ON d.sn=pe.sn
          WHERE pe.id_index IS NOT NULL AND coalesce(pe.workcard,0)=0 ${scope(f, p4)} ${range(f, p4, 'pe.ts')}
-         GROUP BY pe.sn, pe.id_index)
+         GROUP BY pe.sn, (pe.ts AT TIME ZONE $1)::date, pe.id_index)
        SELECT count(*)::int AS n, coalesce(avg(extract(epoch FROM (t_out - t_in)) * 1000),0)::bigint AS avg_ms
        FROM e WHERE t_in IS NOT NULL AND t_out IS NOT NULL AND t_out > t_in AND t_out - t_in < interval '12 hours'`, p4);
     dwell = { n: ev.rows[0].n, avg_ms: Number(ev.rows[0].avg_ms), source: ev.rows[0].n ? 'events' : null };
@@ -238,12 +242,12 @@ async function heatmap(f) {
 // Нас, хүйс — хүн бүрийн үйл явдлаас. Төхөөрөмж нас/хүйс/өндөр/байх хугацааг ихэвчлэн ГАРАХ (1) үйл явдалд хавсаргадаг,
 // орох (0) үйл явдалд заримдаа хоосон ирдэг тул хүн бүрийг (sn, id_index) нэг удаа — мэдээлэл илүүтэй мөрийг нь — тоолно.
 async function demographics(f) {
-  const p = [];
+  const p = [f.tz || DEFAULT_TZ];   // $1 = цагийн бүс (өдрөөр бүлэглэхэд)
   const base = `FROM (
-      SELECT DISTINCT ON (pe.sn, coalesce(pe.id_index, pe.id)) pe.*
+      SELECT DISTINCT ON (pe.sn, (pe.ts AT TIME ZONE $1)::date, coalesce(pe.id_index, pe.id)) pe.*
       FROM person_events pe JOIN devices d ON d.sn=pe.sn
       WHERE pe.event_type IN (0,1) ${scope(f, p)} ${range(f, p, 'pe.ts')}
-      ORDER BY pe.sn, coalesce(pe.id_index, pe.id),
+      ORDER BY pe.sn, (pe.ts AT TIME ZONE $1)::date, coalesce(pe.id_index, pe.id),
         (CASE WHEN pe.gender IN (1,2) THEN 0 ELSE 1 END), (CASE WHEN pe.age_min IS NULL THEN 1 ELSE 0 END), pe.event_type DESC, pe.ts DESC
     ) pe WHERE 1=1`;
   const gender = await query(`SELECT coalesce(pe.gender,0) AS gender, count(*)::int AS n ${base} AND coalesce(pe.workcard,0)=0 GROUP BY 1`, p);
