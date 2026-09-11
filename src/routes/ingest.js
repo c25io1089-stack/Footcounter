@@ -128,14 +128,20 @@ async function dataUpload(req, res) {
       const ts = fix(b.time) || new Date();
       const start = fix(b.startTime) || ts;
       const end = fix(b.endTime) || ts;
+      // Төхөөрөмж интервал бүрт насанд хүрэгч/хүүхдийн задаргааг хамт илгээдэг — хадгална
+      const n = (v) => Number(v) || 0;
       await client.query(
-        `INSERT INTO flow_records(sn, ts, start_time, end_time, in_count, out_count, passby, turnback, avg_stay_ms, data_mode)
-         VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+        `INSERT INTO flow_records(sn, ts, start_time, end_time, in_count, out_count, passby, turnback, avg_stay_ms, data_mode,
+           in_adult, in_child, out_adult, out_child, passby_adult, passby_child, turnback_adult, turnback_child)
+         VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
          ON CONFLICT (sn, start_time, end_time, ts) DO UPDATE SET
            in_count=EXCLUDED.in_count, out_count=EXCLUDED.out_count, passby=EXCLUDED.passby,
-           turnback=EXCLUDED.turnback, avg_stay_ms=EXCLUDED.avg_stay_ms`,
-        [sn, ts, start, end, Number(b.in) || 0, Number(b.out) || 0, Number(b.passby) || 0,
-          Number(b.turnback) || 0, Number(b.avgStayTime) || 0, b.dataMode === 'Total' ? 'Total' : 'Add']
+           turnback=EXCLUDED.turnback, avg_stay_ms=EXCLUDED.avg_stay_ms,
+           in_adult=EXCLUDED.in_adult, in_child=EXCLUDED.in_child, out_adult=EXCLUDED.out_adult, out_child=EXCLUDED.out_child,
+           passby_adult=EXCLUDED.passby_adult, passby_child=EXCLUDED.passby_child,
+           turnback_adult=EXCLUDED.turnback_adult, turnback_child=EXCLUDED.turnback_child`,
+        [sn, ts, start, end, n(b.in), n(b.out), n(b.passby), n(b.turnback), n(b.avgStayTime), b.dataMode === 'Total' ? 'Total' : 'Add',
+          n(b.inAdult), n(b.inChild), n(b.outAdult), n(b.outChild), n(b.passbyAdult), n(b.passbyChild), n(b.turnbackAdult), n(b.turnbackChild)]
       );
 
       const attrs = Array.isArray(b.attributes) ? b.attributes : [];

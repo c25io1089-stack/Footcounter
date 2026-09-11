@@ -135,6 +135,7 @@ async function flowTotals(f) {
   const r = await query(
     `SELECT coalesce(sum(fr.in_count),0)::int AS in_count, coalesce(sum(fr.out_count),0)::int AS out_count,
        coalesce(sum(fr.passby),0)::int AS passby, coalesce(sum(fr.turnback),0)::int AS turnback,
+       coalesce(sum(fr.in_adult),0)::int AS in_adult, coalesce(sum(fr.in_child),0)::int AS in_child,
        CASE WHEN sum(fr.in_count)>0 THEN (sum(fr.avg_stay_ms*fr.in_count)/sum(fr.in_count))::int ELSE 0 END AS avg_stay_ms
      FROM flow_records fr JOIN devices d ON d.sn=fr.sn
      WHERE fr.data_mode='Add' ${scope(f, p)} ${range(f, p, 'fr.ts')}`, p);

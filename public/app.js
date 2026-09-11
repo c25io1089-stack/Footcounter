@@ -219,6 +219,12 @@
       ctx.restore();
     },
   };
+  // Үзүүрийн шошгуудын хамгийн өргөнийг хэмжиж, графикт үлдээх баруун зайг буцаана
+  const measure = document.createElement('canvas').getContext('2d');
+  const labelPad = (vals, total) => {
+    measure.font = `650 11px ${Chart.defaults.font.family}`;
+    return Math.ceil(Math.max(0, ...vals.map((v) => measure.measureText(`${fmt(v)} · ${pct(v, total)}`).width))) + 14;
+  };
   const barValues = {
     id: 'barValues',
     afterDatasetsDraw(c, a, o) {
@@ -1015,6 +1021,9 @@ POST ${O}/api/camera/dup          — өдрийн DUP (realtime + final) тай
           <div class="prof"><h3>Хүйс</h3>
             <div class="chart-wrap donut"><canvas id="cGender"></canvas></div>
             <div class="legend" style="margin-top:10px" id="dbGenLegend"></div></div>
+          <div class="prof"><h3>Насанд хүрэгч / Хүүхэд <span class="sub muted" id="dbAcSub"></span></h3>
+            <div class="chart-wrap donut"><canvas id="cAdultChild"></canvas></div>
+            <div class="legend" style="margin-top:10px" id="dbAcLegend"></div></div>
           <div class="prof"><h3>Насны бүлэг <span class="sub muted" id="dbAgeSub"></span></h3>
             <div class="chart-wrap bar6"><canvas id="cAge"></canvas></div></div>
           <div class="prof"><h3>Өндөр <span class="sub muted" id="dbHgtSub"></span></h3>
@@ -1071,6 +1080,17 @@ POST ${O}/api/camera/dup          — өдрийн DUP (realtime + final) тай
       const gTotal = s.male + s.female + s.unknown;
       setText('dbProfSub', gTotal ? `${fmt(gTotal)} зочны танигдсан шинж` : 'өгөгдөл алга');
       setText('dbGenLegend', `<span style="--c:var(--c1)">Эр ${fmt(s.male)} (${pct(s.male, gTotal)})</span><span style="--c:var(--c4)">Эм ${fmt(s.female)} (${pct(s.female, gTotal)})</span><span style="--c:var(--c-ctx)">Тодорхойгүй ${fmt(s.unknown)} (${pct(s.unknown, gTotal)})</span>`);
+      // Насанд хүрэгч/хүүхэд: төхөөрөмж интервал бүртээ илгээдэг тул хүн бүрийн шинжээс
+      // хамаарахгүй, орсон хүн бүрийг хамардаг. Үлдэгдлийг «Тодорхойгүй» гэж шударгаар харуулна.
+      const acAd = t.in_adult || 0, acCh = t.in_child || 0, acUn = Math.max(0, (t.in_count || 0) - acAd - acCh), acT = acAd + acCh + acUn;
+      setText('dbAcSub', acT ? `${fmt(acT)} орсон` : 'өгөгдөл алга');
+      setText('dbAcLegend', `<span style="--c:var(--c1)">Насанд хүрэгч ${fmt(acAd)} (${pct(acAd, acT)})</span><span style="--c:var(--c3)">Хүүхэд ${fmt(acCh)} (${pct(acCh, acT)})</span><span style="--c:var(--c-ctx)">Тодорхойгүй ${fmt(acUn)} (${pct(acUn, acT)})</span>`);
+      if (!setChart('cAdultChild', null, [[acAd, acCh, acUn]])) {
+        mk('cAdultChild', { type: 'doughnut', data: { labels: ['Насанд хүрэгч', 'Хүүхэд', 'Тодорхойгүй'],
+          datasets: [{ data: [acAd, acCh, acUn], backgroundColor: [css('--c1'), css('--c3'), css('--c-ctx')], borderWidth: 2, borderColor: css('--surface'), hoverOffset: 4 }] },
+          options: { responsive: true, maintainAspectRatio: false, animation: false, cutout: '68%', plugins: { legend: { display: false }, donutCenter: { sub: 'орсон' } } },
+          plugins: [donutCenter] });
+      }
       // Сегмент хооронд 2px гадаргууны завсар; нэр, тоо, хувь нь доорх тайлбарт бүтнээрээ
       if (!setChart('cGender', null, [[s.male, s.female, s.unknown]])) {
         mk('cGender', { type: 'doughnut', data: { labels: ['Эрэгтэй', 'Эмэгтэй', 'Тодорхойгүй'],
@@ -1092,8 +1112,9 @@ POST ${O}/api/camera/dup          — өдрийн DUP (realtime + final) тай
         mk(id, { type: 'bar', data: { labels: keep.map((i) => bands[i][1]), datasets: [{ label: 'Зочин', data: vals, maxBarThickness: 18,
           backgroundColor: keep.map((i) => css(i === bands.length - 1 ? '--c-ctx' : ramp[i])) }] },
           options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, animation: false,
-            // Тэнхлэгийг хамгийн урт баганаас 35% сунгана — үзүүрийн тоо, хувь үргэлж багтана
-            scales: { x: { display: false, beginAtZero: true, max: Math.max(1, ...vals) * 1.35 }, y: { grid: { display: false }, border: { display: false }, ticks: { padding: 2 } } },
+            // Үзүүрийн шошгод яг хэрэгтэй зайг хэмжиж үлдээнэ — багана нарийсахад ч тоо нь багтана
+            layout: { padding: { right: labelPad(vals, total) } },
+            scales: { x: { display: false, beginAtZero: true, max: Math.max(1, ...vals) }, y: { grid: { display: false }, border: { display: false }, ticks: { padding: 2 } } },
             plugins: { legend: { display: false }, barValues: { axis: 'y', color: css('--text-2'), total } } },
           plugins: [barValues] });
         if (charts[id]) charts[id].$bandKey = key;
