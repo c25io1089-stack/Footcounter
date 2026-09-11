@@ -1053,14 +1053,10 @@ POST ${O}/api/camera/dup          — өдрийн DUP (realtime + final) тай
         kpi({ label: 'Гарсан', value: fmt(t.out_count), delta: { cur: t.out_count, prev: prev.out_count }, ico: 'out', c: 2 }),
         kpi({ label: 'Өнгөрсөн', value: fmt(t.passby), delta: { cur: t.passby, prev: prev.passby }, ico: 'pass', c: 4 }),
         kpi({ label: 'Буцсан', value: fmt(t.turnback), delta: { cur: t.turnback, prev: prev.turnback }, ico: 'back', c: 5 }),
-        // Дэлгүүрт байсан хугацаа нь REID тайлан / орох–гарах хосоос гардаг. Тэр байхгүй үед
-        // төхөөрөмжийн өөрийнх нь хэмждэг «тоолох бүсэд байсан» хугацааг харуулна — хоёр нь өөр
-        // зүйл тул тайлбарт нь алийг нь харуулж байгааг заана.
-        kpi({ label: 'Байх хугацаа',
-          value: t.store_dwell_n ? durLong(t.store_dwell_ms) : (t.avg_stay_ms ? durLong(t.avg_stay_ms) : '—'),
-          sub: t.store_dwell_n ? `${fmt(t.store_dwell_n)} зочин · орсноос гарах хүртэл`
-            : (t.avg_stay_ms ? 'тоолох бүсэд · төхөөрөмжийн хэмжсэн' : 'өгөгдөл алга'),
-          ico: 'clock', c: 7 }),
+        // Байх хугацаа = дэлгүүрт орсноос гарах хүртэл (REID тайлан эсвэл орох→гарах хос).
+        // Төхөөрөмжийн «тоолох бүсэд байсан» хором (хэдхэн сек) нь огт өөр зүйл тул энд
+        // харуулахгүй; бодит хугацаа байхгүй үед хайрцгийг нь бүхэлд нь гаргахгүй.
+        t.store_dwell_n ? kpi({ label: 'Байх хугацаа', value: durLong(t.store_dwell_ms), sub: `${fmt(t.store_dwell_n)} зочин · орсноос гарах хүртэл`, ico: 'clock', c: 7 }) : '',
         kpi({ label: 'Одоо дотор байгаа', value: fmt(ov.occupancy.total), sub: ov.occupancy.devices.some((x) => x.from_snapshot) ? 'төхөөрөмжийн тоолол' : 'орсон − гарсан', ico: 'people', c: 3 }),
       ].join(''));
       const byB = new Map();
