@@ -359,8 +359,9 @@
         ${kpi({ label: 'Өнгөрсөн', value: fmt(t.passby), delta: { cur: t.passby, prev: prev.passby }, ico: 'pass', c: 4, spark: ov.series.map((s) => s.passby) })}
         ${kpi({ label: 'Буцсан', value: fmt(t.turnback), delta: { cur: t.turnback, prev: prev.turnback }, ico: 'back', c: 5, spark: ov.series.map((s) => s.turnback) })}
         ${kpi({ label: 'Байх хугацаа', value: t.store_dwell_n ? durLong(t.store_dwell_ms) : '—', delta: t.store_dwell_n && prev.store_dwell_n ? { cur: t.store_dwell_ms, prev: prev.store_dwell_ms } : null, sub: t.store_dwell_n ? `${fmt(t.store_dwell_n)} зочин · орсноос гарах хүртэл${t.store_dwell_source === 'reid' ? ' (REID)' : ''}` : 'орсон–гарсан хос хараахан алга', ico: 'clock', c: 7 })}
+        ${kpi({ label: 'Одоо дотор байгаа', value: fmt(ov.occupancy.total), sub: ov.occupancy.devices.some((x) => x.from_snapshot) ? 'төхөөрөмжийн бодит тоолол' : 'өнөөдрийн орсон − гарсан', ico: 'people', c: 3 })}
       </div>
-      <div class="stats"><span><b>${fmt(ov.occupancy.total)}</b> одоо дотор байгаа</span><span><b>${pct(t.in_count, t.in_count + t.passby)}</b> орох хувь</span><span><b>${online}/${total}</b> төхөөрөмж online</span></div>
+      <div class="stats"><span><b>${pct(t.in_count, t.in_count + t.passby)}</b> орох хувь</span><span><b>${online}/${total}</b> төхөөрөмж online</span></div>
       <div class="grid g-2 section">
         <div class="card"><div class="head"><h2>Хүний урсгал</h2><span class="sub">${g === 'hour' ? 'цагаар' : g === 'day' ? 'өдрөөр' : '7 хоногоор'}</span></div><div class="chart-wrap"><canvas id="cFlow"></canvas></div></div>
         <div class="card"><div class="head"><h2>Байршлаар</h2><span class="sub">орсон хүн</span></div><div class="tbl-wrap"><table><thead><tr><th>Байршил</th><th class="num">Орсон</th><th class="num">Гарсан</th><th>Хувь</th></tr></thead><tbody>
