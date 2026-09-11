@@ -239,6 +239,26 @@ tbody tr.live-row .pill { padding: 1px 7px; font-size: 10.5px; }
 .modal h2 { margin-bottom: 14px; font-size: 17px; padding-right: 32px; }
 .modal .x { position: absolute; top: 14px; right: 14px; width: 32px; height: 32px; border: 0; background: transparent; border-radius: 8px; color: var(--muted); cursor: pointer; display: grid; place-items: center; font-size: 16px; }
 .modal .x:hover { background: var(--surface-2); color: var(--text); }
+/* Төхөөрөмжийн дэлгэрэнгүй + шигтгэсэн web UI */
+.modal.wide { width: min(1080px, 100%); }
+.modal.fs { width: min(1600px, 100%); max-height: 96vh; }
+.det-top { display: flex; align-items: center; gap: 10px; margin: -8px 0 16px; flex-wrap: wrap; }
+.kv { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px 20px; margin-bottom: 18px; }
+.kv .k { display: block; font-size: 11px; font-weight: 700; letter-spacing: .03em; text-transform: uppercase; color: var(--muted); }
+.kv .v { display: block; margin-top: 3px; font-size: 13.5px; overflow-wrap: anywhere; }
+.webui { border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+.webui-head { display: flex; align-items: center; gap: 8px; padding: 9px 12px; background: var(--surface-2); border-bottom: 1px solid var(--border); }
+.webui-head > svg { width: 18px; height: 18px; flex: none; color: var(--muted); }
+.webui-head b { font-size: 14px; } .webui-head .sp { flex: 1; }
+.webui-bar { display: flex; gap: 6px; padding: 10px 12px; border-bottom: 1px solid var(--border); }
+.webui-bar input { flex: 1; min-width: 0; }
+.webui-frame { height: 56vh; background: #fff; }
+.modal.fs .kv { display: none; } /* томсгосон үед зөвхөн төхөөрөмжийн дэлгэц */
+.modal.fs .webui-frame { height: calc(96vh - 285px); min-height: 360px; }
+.webui-frame iframe { display: block; width: 100%; height: 100%; border: 0; }
+.webui-msg { height: 100%; display: grid; place-content: center; justify-items: center; gap: 10px; padding: 24px; text-align: center; background: var(--surface-2); color: var(--text-2); font-size: 13px; }
+.webui-msg p { margin: 0; max-width: 46ch; color: var(--muted); }
+.webui-note { padding: 9px 12px; border-top: 1px solid var(--border); font-size: 12px; color: var(--muted); margin: 0; }
 .actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--border); }
 .toasts { position: fixed; bottom: 20px; right: 20px; display: flex; flex-direction: column; gap: 8px; z-index: 60; max-width: min(380px, calc(100vw - 32px)); }
 .toast { display: flex; align-items: flex-start; gap: 10px; background: var(--text); color: var(--surface); padding: 11px 14px; border-radius: 12px; box-shadow: var(--shadow-3); font-size: 13px; animation: slideIn .2s ease-out; }

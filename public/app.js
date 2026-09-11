@@ -129,6 +129,7 @@
     key: '<path d="m21 2-2 2m-7.6 7.6a5.5 5.5 0 1 1-7.8 7.8 5.5 5.5 0 0 1 7.8-7.8zm0 0L19 4m-3 3 2 2"/>',
     alert: '<circle cx="12" cy="12" r="9"/><path d="M12 8v4M12 16h.01"/>', db: '<ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v14c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/>',
     pulse: '<path d="M22 12h-4l-3 9L9 3l-3 9H2"/>',
+    globe: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a15 15 0 0 1 0 18 15 15 0 0 1 0-18z"/>',
   };
   const icon = (n) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ICO[n] || ICO.pulse}</svg>`;
   // kpi({label, value, sub, delta:{cur,prev,label}, ico, c (өнгө 1-8), spark:[..], accent})
@@ -377,7 +378,7 @@
           <td class="small">${esc(d.connection_type || '—')} · ${esc(d.ip_address || '—')}<br><span class="muted mono">${esc(d.mac_address || '')}</span></td>
           <td class="small">${esc(d.sw_release || '—')}<br><span class="muted">${esc(d.hw_platform || '')} · ${d.upload_interval === 0 ? 'бодит цаг' : d.upload_interval + ' мин'} · ${d.data_mode}</span>${d.clock_skew_sec ? `<br><span class="pill warn" title="Төхөөрөмжийн цаг серверээс ${Math.round(d.clock_skew_sec / 60)} минут зөрүүтэй илгээж байна — сервер автоматаар засаж хадгална">цаг ${(d.clock_skew_sec / 3600).toFixed(d.clock_skew_sec % 3600 ? 1 : 0)}ц зөрүү · засаж байна</span>` : ''}</td>
           ${isSuper ? '' : `<td class="num">${fmt(fm[d.sn] ? fm[d.sn].in_count : 0)}</td><td class="num">${fmt(fm[d.sn] ? fm[d.sn].out_count : 0)}</td>`}
-          <td><div class="row-actions">${canEdit ? `<button class="btn sm" data-edit="${d.sn}">Засах</button><button class="btn sm ghost" data-resync="${d.sn}">Дахин татах</button>` : ''}<button class="btn sm ghost" data-hb="${d.sn}">Лог</button>${d.ip_address ? `<a class="btn sm ghost" href="http://${esc(d.ip_address)}" target="_blank" rel="noopener" title="Төхөөрөмжийн өөрийн удирдлагын хуудас (${esc(d.ip_address)}) — зөвхөн дэлгүүрийн сүлжээнд байхад нээгдэнэ">Төхөөрөмжийн web ↗</a>` : ''}${isSuper ? `<button class="btn sm ghost danger" data-del="${esc(d.sn)}" title="Төхөөрөмж ба түүний бүх өгөгдлийг устгана">Устгах</button>` : ''}</div></td></tr>`).join('') || `<tr><td colspan="10"><div class="empty-state"><div class="ico">${icon('device')}</div><b>Төхөөрөмж хараахан холбогдоогүй</b><p>Төхөөрөмжийн Data Push тохиргоонд доорх серверийн хаягийг оруулмагц эхний heartbeat-ээр энд автоматаар гарч ирнэ.</p></div></td></tr>`}
+          <td><div class="row-actions">${canEdit ? `<button class="btn sm" data-edit="${d.sn}">Засах</button><button class="btn sm ghost" data-resync="${d.sn}">Дахин татах</button>` : ''}<button class="btn sm ghost" data-hb="${d.sn}">Лог</button><button class="btn sm ghost" data-web="${esc(d.sn)}" title="Бүх мэдээлэл ба төхөөрөмжийн өөрийн web UI">Дэлгэрэнгүй</button>${isSuper ? `<button class="btn sm ghost danger" data-del="${esc(d.sn)}" title="Төхөөрөмж ба түүний бүх өгөгдлийг устгана">Устгах</button>` : ''}</div></td></tr>`).join('') || `<tr><td colspan="10"><div class="empty-state"><div class="ico">${icon('device')}</div><b>Төхөөрөмж хараахан холбогдоогүй</b><p>Төхөөрөмжийн Data Push тохиргоонд доорх серверийн хаягийг оруулмагц эхний heartbeat-ээр энд автоматаар гарч ирнэ.</p></div></td></tr>`}
       </tbody></table></div></div>
       <div class="card"><div class="head"><h2>Шинэ төхөөрөмж холбох</h2>${canEdit ? '<button class="btn primary" id="claimBtn">+ SN-ээр нэмэх</button>' : ''}</div>
         <details ${devs.length ? '' : 'open'}><summary>Төхөөрөмжийн тохиргооны заавар (Data Push)</summary>
@@ -396,6 +397,8 @@ Interface (анхдагч зөв бол хөндөхгүй):
       const ed = e.target.closest('[data-edit]'); const rs = e.target.closest('[data-resync]'); const hb = e.target.closest('[data-hb]');
       if (ed) deviceModal(devs.find((d) => d.sn === ed.dataset.edit));
       if (rs) resyncModal(rs.dataset.resync);
+      const web = e.target.closest('[data-web]');
+      if (web) deviceDetailModal(devs.find((d) => d.sn === web.dataset.web), fm[web.dataset.web]);
       const del = e.target.closest('[data-del]');
       if (del && await confirmDlg(`${del.dataset.del} төхөөрөмжийг бүх өгөгдөл, heartbeat логтой нь хамт бүрмөсөн устгах уу? Төхөөрөмж дахин heartbeat илгээвэл хуваарилаагүй байдлаар дахин бүртгэгдэнэ.`, { danger: true })) { try { await api('/dash/devices/' + del.dataset.del, { method: 'DELETE' }); toast('Төхөөрөмж устгагдлаа'); await loadMeta(); fillLocationSelects(); render(); } catch (err) { toast(err.message, 'error'); } }
       if (e.target.id === 'claimBtn') claimModal();
@@ -428,6 +431,68 @@ Interface (анхдагч зөв бол хөндөхгүй):
       bg.querySelector('#f').onsubmit = async (e) => { e.preventDefault(); try { const d = await api('/dash/devices/claim', { method: 'POST', body: Object.fromEntries(new FormData(e.target)) }); toast(isSuper ? `${d.sn} хуваарилагдлаа` : 'Төхөөрөмж нэмэгдлээ'); close(); await loadMeta(); fillLocationSelects(); render(); } catch (err) { toast(err.message, 'error'); } };
     });
   }
+  // Төхөөрөмжийн дэлгэрэнгүй: бүх мэдээлэл + доод талд нь төхөөрөмжийн өөрийн web UI-г шигтгэж харуулна
+  // (шинэ цонх руу шилжихгүй). Зөвхөн төхөөрөмжтэй нэг сүлжээнд байхад ачаална.
+  const webKey = (sn) => 'devweb:' + sn;
+  const lsGet = (k) => { try { return localStorage.getItem(k) || ''; } catch { return ''; } };
+  const lsSet = (k, v) => { try { localStorage.setItem(k, v); } catch { /* private mode */ } };
+  function deviceDetailModal(d, f) {
+    if (!d) return;
+    const kv = (k, v) => `<div><span class="k">${k}</span><span class="v">${v == null || v === '' ? '—' : v}</span></div>`;
+    const url0 = lsGet(webKey(d.sn)) || (d.ip_address ? 'http://' + d.ip_address : '');
+    modal(`<h2>${esc(d.name || '(нэргүй)')}</h2>
+      <div class="det-top"><span class="pill ${d.online ? 'on' : d.last_heartbeat ? 'off' : 'na'}"><i class="dot"></i>${d.online ? 'Online' : d.last_heartbeat ? 'Offline' : 'Мэдээгүй'}</span><span class="mono muted">${esc(d.sn)}</span></div>
+      <div class="kv">
+        ${kv('Байршил', d.location_name ? esc(d.location_name) : '<span class="pill warn">Оноогоогүй</span>')}
+        ${kv('Байгууллага', esc(d.tenant_name || ''))}
+        ${kv('IP хаяг', `<span class="mono">${esc(d.ip_address || '')}</span>`)}
+        ${kv('MAC', `<span class="mono">${esc(d.mac_address || '')}</span>`)}
+        ${kv('Холболт', esc(d.connection_type || '') + (d.wifi_ssid ? ' · ' + esc(d.wifi_ssid) : '') + (d.ip_method ? ' · ' + esc(d.ip_method) : ''))}
+        ${kv('Host name', esc(d.host_name || ''))}
+        ${kv('Firmware', esc(d.sw_release || ''))}
+        ${kv('Тоног төхөөрөмж', esc(d.hw_platform || ''))}
+        ${kv('Илгээх давтамж', d.upload_interval === 0 ? 'бодит цаг' : d.upload_interval + ' мин')}
+        ${kv('Горим', esc(d.data_mode || '') + ' · UTC+' + d.timezone_offset)}
+        ${kv('Цагийн зөрүү', d.clock_skew_sec ? `<span class="pill warn">${(d.clock_skew_sec / 3600).toFixed(d.clock_skew_sec % 3600 ? 1 : 0)} ц · сервер засаж байна</span>` : 'байхгүй')}
+        ${kv('Эхний холболт', fmtDT(d.first_seen))}
+        ${kv('Сүүлийн heartbeat', ago(d.last_heartbeat) + (d.last_heartbeat ? ` <span class="muted small">(${fmtDT(d.last_heartbeat)})</span>` : ''))}
+        ${kv('Сүүлийн өгөгдөл', ago(d.last_data_at) + (d.last_data_at ? ` <span class="muted small">(${fmtDT(d.last_data_at)})</span>` : ''))}
+        ${f ? kv('Орсон / Гарсан', `${fmt(f.in_count)} / ${fmt(f.out_count)} <span class="muted small">(сонгосон хугацаа)</span>`) : ''}
+      </div>
+      <div class="webui">
+        <div class="webui-head">${icon('globe')}<b>Төхөөрөмжийн web UI</b><span class="sp"></span>
+          <button type="button" class="btn sm ghost" id="wExp" title="Томсгох">⤢</button>
+          <a class="btn sm ghost" id="wNew" href="#" target="_blank" rel="noopener" title="Шинэ цонхонд нээх">↗</a></div>
+        <form class="webui-bar" id="wF"><input type="text" id="wUrl" class="mono" spellcheck="false" autocomplete="off" aria-label="Төхөөрөмжийн хаяг" placeholder="http://192.168.1.50:8080/main.html" value="${esc(url0)}"><button type="submit" class="btn sm">Нээх</button></form>
+        <div class="webui-frame" id="wFrame"></div>
+        <p class="webui-note">Энэ хуудас төхөөрөмж дотор ажилладаг тул зөвхөн түүнтэй нэг сүлжээнд (дэлгүүрийн WiFi/кабель, VPN) байхад ачаална. Порт/зам өөр бол дээрх хаягийг засаад «Нээх» дарна — сонголт тухайн төхөөрөмжид хадгалагдана.</p>
+      </div>`, (bg) => {
+      bg.querySelector('.modal').classList.add('wide');
+      const box = bg.querySelector('#wFrame'), link = bg.querySelector('#wNew');
+      const msg = (h) => { box.innerHTML = `<div class="webui-msg">${h}</div>`; };
+      function load(u) {
+        u = String(u || '').trim();
+        link.href = u || '#';
+        if (!u) return msg('<b>IP хаяг мэдэгдэхгүй байна</b><p>Төхөөрөмж эхний heartbeat илгээмэгц IP нь энд гарна. Мэдэж байвал дээр гараар бичиж болно.</p>');
+        if (!/^https?:\/\/[^\s]+$/i.test(u)) return msg('<b>Хаяг буруу байна</b><p><span class="mono">http://…</span> хэлбэртэй бичнэ үү.</p>');
+        lsSet(webKey(d.sn), u);
+        // HTTPS самбар дотор HTTP frame-ийг браузер бүрмөсөн хориглоно (mixed content) — шинэ цонхоор нээлгэнэ
+        if (location.protocol === 'https:' && u.startsWith('http://')) {
+          return msg(`<b>Энэ самбар HTTPS-ээр ажиллаж байна</b><p>Браузер HTTPS хуудсан дотор HTTP агуулга ачаалахыг хориглодог тул төхөөрөмжийн хуудсыг энд шигтгэж чадахгүй.</p><a class="btn primary sm" href="${esc(u)}" target="_blank" rel="noopener">Шинэ цонхонд нээх ↗</a>`);
+        }
+        box.innerHTML = '';
+        const fr = document.createElement('iframe');
+        fr.setAttribute('referrerpolicy', 'no-referrer');
+        fr.setAttribute('sandbox', 'allow-scripts allow-forms allow-same-origin allow-popups allow-modals allow-downloads');
+        fr.src = u;
+        box.appendChild(fr);
+      }
+      bg.querySelector('#wF').onsubmit = (e) => { e.preventDefault(); load(bg.querySelector('#wUrl').value); };
+      bg.querySelector('#wExp').onclick = () => bg.querySelector('.modal').classList.toggle('fs');
+      load(url0);
+    });
+  }
+
   function deviceModal(d) {
     const isSuper = state.user.role === 'superadmin';
     const locs = state.locations.filter((l) => !isSuper || !state.tenantId || String(l.tenant_id) === String(state.tenantId));
