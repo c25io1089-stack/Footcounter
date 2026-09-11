@@ -760,8 +760,7 @@ POST ${O}/api/camera/dup          — өдрийн DUP (realtime + final) тай
         <div class="card"><div class="head"><h2>Насны бүлэг</h2><span class="sub" id="dbAgeSub"></span></div><div class="chart-wrap sm"><canvas id="cAge"></canvas></div></div>
         <div class="card"><div class="head"><h2>Байршлаар</h2><span class="sub">орсон хүн</span></div><div class="tbl-wrap"><table><thead><tr><th>Байршил</th><th class="num">Орсон</th><th class="num">Гарсан</th><th style="width:30%"></th></tr></thead><tbody id="dbLoc"></tbody></table></div></div>
       </div>
-      <div class="card section"><div class="head"><h2>Долоо хоногийн өдөр × цаг</h2><span class="sub">орсон хүний нягтрал</span></div><div id="heat"></div></div>
-      <div class="card section"><div class="head"><h2>Төхөөрөмж</h2><span class="sub" id="dbDevSub"></span></div><div class="live-devices" id="dbDevs"></div></div>`;
+      <div class="card section"><div class="head"><h2>Долоо хоногийн өдөр × цаг</h2><span class="sub">орсон хүний нягтрал</span></div><div id="heat"></div></div>`;
     $('#dbFs').onclick = toggleFs;
     const clock = () => setText('dbClock', clockText());
     let prev = null, heatDone = false;
@@ -822,8 +821,6 @@ POST ${O}/api/camera/dup          — өдрийн DUP (realtime + final) тай
       }
       const topIn = ov.by_location[0] ? ov.by_location[0].in_count : 0;
       setText('dbLoc', ov.by_location.map((l) => `<tr><td><b>${esc(l.location_name)}</b><br><span class="small muted">${l.online_count}/${l.device_count} online</span></td><td class="num">${fmt(l.in_count)}</td><td class="num">${fmt(l.out_count)}</td><td><div class="bar"><i style="width:${pct(l.in_count, topIn)}"></i></div></td></tr>`).join('') || '<tr><td colspan="4" class="empty">Байршил алга</td></tr>');
-      setText('dbDevSub', `${online}/${total} online`);
-      setText('dbDevs', ov.by_device.map((d) => `<span class="pill ${d.online ? 'on' : d.last_heartbeat ? 'off' : 'na'}" title="heartbeat ${ago(d.last_heartbeat)} · өгөгдөл ${ago(d.last_data_at)}"><i class="dot"></i>${esc(d.name || d.sn)}${d.location_name ? ' · ' + esc(d.location_name) : ''}</span>`).join('') || '<span class="muted">Төхөөрөмж алга</span>');
       const lu = $('#lastUpd'); if (lu) lu.textContent = 'Шинэчилсэн ' + clockText();
     }
     clock(); await tick();
