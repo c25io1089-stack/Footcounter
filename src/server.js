@@ -43,7 +43,7 @@ app.use('/dash', require('./routes/dashboard'));
 app.use('/api/v1', require('./routes/publicApi'));
 
 // Статик dashboard
-// app.js/app.css: ETag-аар revalidate (шинэ deploy шууд харагдана, хуучин кэшнээс болж «хуучин UI» гарахгүй); vendor: 7 хоног
+// Бүх js/css (vendor оролцуулаад) index.html-д ?v=BUILD-тэй ордог тул урт кэш аюулгүй.
 // Build ID: Railway-ийн commit SHA, үгүй бол асаасан цаг. index.html-д app.js?v=BUILD гэж орно — deploy бүрт URL шинэ тул
 // Cloudflare/browser-ийн кэш (CF js/css-д 4 цагийн max-age тулгадаг) хуучин хувилбар үлдээхгүй.
 const BUILD = (process.env.RAILWAY_GIT_COMMIT_SHA || process.env.SOURCE_VERSION || '').slice(0, 10) || String(Date.now());
@@ -52,8 +52,8 @@ app.use(express.static(path.join(__dirname, '..', 'public'), {
   etag: true,
   index: false,
   setHeaders(res, filePath) {
-    if (/[\\/]vendor[\\/]/.test(filePath)) res.setHeader('Cache-Control', 'public, max-age=604800, immutable');
-    else if (/\.(js|css)$/.test(filePath)) res.setHeader('Cache-Control', 'public, max-age=31536000, immutable'); // URL-д хувилбар байгаа тул урт кэшлэж болно
+    // vendor ч мөн адил ?v=BUILD-тэй ордог тул нэг журмаар — сан шинэчлэхэд хуучин файл үлдэхгүй
+    if (/\.(js|css)$/.test(filePath)) res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
     else res.setHeader('Cache-Control', 'no-cache');
   },
 }));
