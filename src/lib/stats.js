@@ -157,10 +157,11 @@ async function flowTotals(f) {
     const p4 = [f.tz || DEFAULT_TZ];   // $1 = цагийн бүс
     const ev = await query(
       `WITH e AS (
-         SELECT pe.sn, pe.id_index, min(pe.ts) FILTER (WHERE pe.event_type=0) AS t_in, max(pe.ts) FILTER (WHERE pe.event_type=1) AS t_out
+         SELECT pe.sn, coalesce(pe.person_id, pe.id_index) AS pkey,
+           min(pe.ts) FILTER (WHERE pe.event_type=0) AS t_in, max(pe.ts) FILTER (WHERE pe.event_type=1) AS t_out
          FROM person_events pe JOIN devices d ON d.sn=pe.sn
-         WHERE pe.id_index IS NOT NULL AND coalesce(pe.workcard,0)=0 ${scope(f, p4)} ${range(f, p4, 'pe.ts')}
-         GROUP BY pe.sn, (pe.ts AT TIME ZONE $1)::date, pe.id_index)
+         WHERE coalesce(pe.person_id, pe.id_index) IS NOT NULL AND coalesce(pe.workcard,0)=0 ${scope(f, p4)} ${range(f, p4, 'pe.ts')}
+         GROUP BY pe.sn, (pe.ts AT TIME ZONE $1)::date, coalesce(pe.person_id, pe.id_index))
        SELECT count(*)::int AS n, coalesce(avg(extract(epoch FROM (t_out - t_in)) * 1000),0)::bigint AS avg_ms
        FROM e WHERE t_in IS NOT NULL AND t_out IS NOT NULL AND t_out > t_in AND t_out - t_in < interval '12 hours'`, p4);
     dwell = { n: ev.rows[0].n, avg_ms: Number(ev.rows[0].avg_ms), source: ev.rows[0].n ? 'events' : null };
