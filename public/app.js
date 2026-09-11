@@ -815,7 +815,7 @@ POST ${O}/api/camera/dup          — өдрийн DUP (realtime + final) тай
       </div>
       <div class="grid g-2 section">
         <div class="card"><div class="head"><h2>Сүүлийн 60 минут</h2><span class="sub" id="lvLastMin"></span></div><div class="chart-wrap sm"><canvas id="cLive"></canvas></div></div>
-        <div class="card"><div class="head"><h2>Шууд урсгал</h2><span class="sub">хүн бүрийн үйл явдал</span></div><div class="ticker" id="lvTicker"><div class="empty">Хүлээж байна…</div></div></div>
+        <div class="card"><div class="head"><h2>Шууд урсгал</h2><span class="sub">зочин бүр — орсноос гарах хүртэл</span></div><div class="ticker" id="lvTicker"><div class="empty">Хүлээж байна…</div></div></div>
       </div>
       <div class="card section"><div class="head"><h2>Төхөөрөмж</h2><span class="sub" id="lvDevSub"></span></div><div class="live-devices" id="lvDevs"></div></div>
     </div>`;
@@ -840,22 +840,24 @@ POST ${O}/api/camera/dup          — өдрийн DUP (realtime + final) тай
       if (charts.cLive) { const c = charts.cLive; c.data.labels = labels; c.data.datasets[0].data = ins; c.data.datasets[1].data = outs; c.update('none'); }
       else mk('cLive', { type: 'bar', data: { labels, datasets: [{ label: 'Орсон', data: ins, backgroundColor: css('--s1') }, { label: 'Гарсан', data: outs, backgroundColor: css('--s2') }] },
         options: { responsive: true, maintainAspectRatio: false, animation: false, interaction: { mode: 'index', intersect: false }, scales: { x: { stacked: false, grid: { display: false }, ticks: { maxTicksLimit: 7 } }, y: { beginAtZero: true, grid: { color: css('--border') }, border: { display: false }, ticks: { precision: 0 } } }, plugins: { legend: { position: 'top', align: 'end' } } } });
-      // Ticker — шинэ үйл явдлыг дээр нь нэмнэ
-      const tk = $('#lvTicker'); const evs = d.events.slice(0, 30);
-      if (!evs.length) tk.innerHTML = '<div class="empty">Сүүлийн 1 цагт үйл явдал ирээгүй</div>';
-      else {
-        if (tk.querySelector('.empty')) tk.innerHTML = '';
-        const fresh = evs.filter((e) => !seen.has(e.id)).reverse();
-        for (const e of fresh) {
-          seen.add(e.id);
-          const [name, cls] = EV[e.event_type] || ['?', ''];
-          const who = [e.gender === 1 ? 'Эр' : e.gender === 2 ? 'Эм' : null, e.age_min != null ? `${e.age_min}–${e.age_max}` : null, e.height_cm ? `${e.height_cm} см` : null, e.workcard ? 'ажилтан' : null, e.wheelchair ? 'тэргэнцэр' : null].filter(Boolean).join(' · ');
-          const row = document.createElement('div'); row.className = 'tk new';
-          row.innerHTML = `<span class="t">${new Date(e.ts).toLocaleTimeString('mn-MN', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })}</span><span class="ev ${cls}">${name}</span><span class="who">${esc(who || '—')}</span><span class="dev">${esc(e.device_name || e.sn)}</span>`;
-          tk.prepend(row);
-        }
-        while (tk.children.length > 30) tk.lastChild.remove();
+      // Ticker — зочин бүр нэг мөр: орох үед гараад, гарахад нас/хүйс + байсан хугацаа нэмэгдэнэ; өнгөрсөн/буцсан тусдаа мөр
+      const tk = $('#lvTicker');
+      const hm = (x) => new Date(x).toLocaleTimeString('mn-MN', { hour: '2-digit', minute: '2-digit', hour12: false });
+      const rows = [];
+      for (const v of d.visits) {
+        const who = [v.gender === 1 ? 'Эр' : v.gender === 2 ? 'Эм' : null, v.age_min != null ? `${v.age_min}–${v.age_max}` : null, v.height_cm ? `${v.height_cm} см` : null, v.staff ? 'ажилтан' : null, v.wheelchair ? 'тэргэнцэр' : null].filter(Boolean).join(' · ');
+        const inside = v.t_in && !v.t_out;
+        const dwellMs = v.t_in && v.t_out ? new Date(v.t_out) - new Date(v.t_in) : inside ? Date.now() - new Date(v.t_in) : null;
+        rows.push({ key: `v:${v.sn}:${v.id_index}`, ts: v.last_ts, cls: inside ? 'in' : 'out', label: inside ? 'Дотор байна' : v.t_in ? 'Гарсан' : 'Гарсан*',
+          time: `${v.t_in ? hm(v.t_in) : '…'} → ${v.t_out ? hm(v.t_out) : '…'}`, who: who || (inside ? 'нас/хүйс гарахад тодорно' : '—'),
+          dwell: dwellMs != null && dwellMs > 0 ? (inside ? `${durLong(dwellMs)} болж байна` : `${durLong(dwellMs)} байсан`) : (v.t_in ? '' : 'орох бүртгэлгүй'), dev: v.device_name || v.sn });
       }
+      for (const e of d.passes) rows.push({ key: `e:${e.id}`, ts: e.ts, cls: e.event_type === 2 ? 'pass' : 'back', label: e.event_type === 2 ? 'Өнгөрсөн' : 'Буцсан', time: hm(e.ts), who: [e.gender === 1 ? 'Эр' : e.gender === 2 ? 'Эм' : null, e.age_min != null ? `${e.age_min}–${e.age_max}` : null].filter(Boolean).join(' · ') || '—', dwell: '', dev: e.device_name || e.sn });
+      rows.sort((a, b) => new Date(b.ts) - new Date(a.ts));
+      const top = rows.slice(0, 30);
+      if (!top.length) tk.innerHTML = '<div class="empty">Сүүлийн цагуудад зочин бүртгэгдээгүй</div>';
+      else tk.innerHTML = top.map((r) => `<div class="tk ${seen.has(r.key) ? '' : 'new'} ${r.cls === 'in' ? 'inside' : ''}"><span class="t">${r.time}</span><span class="ev ${r.cls}">${r.label}</span><span class="who">${esc(r.who)}</span>${r.dwell ? `<span class="dw">${esc(r.dwell)}</span>` : ''}<span class="dev">${esc(r.dev)}</span></div>`).join('');
+      top.forEach((r) => seen.add(r.key));
       // Төхөөрөмж
       const on = d.devices.filter((x) => x.online).length;
       setText('lvDevSub', `${on}/${d.devices.length} online`);

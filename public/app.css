@@ -102,6 +102,9 @@ h1 { font-size: 20px; line-height: 1.25; } h2 { font-size: 14.5px; } h3 { font-s
 .tk .ev.in { background: var(--good-soft); color: var(--good); } .tk .ev.out { background: color-mix(in srgb, var(--s2) 15%, var(--surface)); color: var(--s2); }
 .tk .ev.pass { background: var(--warn-soft); color: var(--warn); } .tk .ev.back { background: color-mix(in srgb, var(--s5) 15%, var(--surface)); color: var(--s5); }
 .tk .who { color: var(--text-2); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .tk .dev { margin-left: auto; color: var(--muted); font-size: 12px; flex: none; }
+.tk .t { width: auto; min-width: 96px; } .tk .dw { flex: none; font-weight: 600; color: var(--text); font-variant-numeric: tabular-nums; }
+.tk.inside { background: color-mix(in srgb, var(--good) 8%, var(--surface)); border: 1px dashed color-mix(in srgb, var(--good) 35%, transparent); }
+.tk.inside .dw { color: var(--good); }
 .live-devices { display: flex; flex-wrap: wrap; gap: 8px; }
 .live-devices .pill { padding: 6px 12px; font-size: 13px; }
 body.fs .sidebar, body.fs .topbar, body.fs .toolbar { display: none !important; }

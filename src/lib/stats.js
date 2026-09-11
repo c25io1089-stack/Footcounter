@@ -273,6 +273,27 @@ async function dedupSummary(f) {
   return { reports: rows, aggregate: agg };
 }
 
+// Бодит цаг: зочин бүр нэг мөр — (sn, id_index)-ээр орох(0)/гарах(1) үйл явдлыг нэгтгэнэ (сүүлийн 6 цаг); өнгөрсөн/буцсан тусдаа
+async function liveVisits(f) {
+  const p = [];
+  const visits = await query(
+    `SELECT pe.sn, pe.id_index, d.name AS device_name,
+       min(pe.ts) FILTER (WHERE pe.event_type=0) AS t_in, max(pe.ts) FILTER (WHERE pe.event_type=1) AS t_out,
+       max(pe.gender) FILTER (WHERE pe.gender IN (1,2)) AS gender,
+       max(pe.age_min) AS age_min, max(pe.age_max) AS age_max, max(pe.height_cm) FILTER (WHERE pe.height_cm > 0) AS height_cm,
+       max(pe.stay_time_ms) AS stay_time_ms, bool_or(coalesce(pe.workcard,0)=1) AS staff, bool_or(coalesce(pe.wheelchair,0)=1) AS wheelchair,
+       max(pe.ts) AS last_ts
+     FROM person_events pe JOIN devices d ON d.sn=pe.sn
+     WHERE pe.id_index IS NOT NULL AND pe.event_type IN (0,1) AND pe.ts > now() - interval '6 hours' ${scope(f, p)}
+     GROUP BY pe.sn, pe.id_index, d.name ORDER BY last_ts DESC LIMIT 40`, p);
+  const p2 = [];
+  const passes = await query(
+    `SELECT pe.id, pe.sn, pe.ts, pe.event_type, pe.gender, pe.age_min, pe.age_max, pe.height_cm, d.name AS device_name
+     FROM person_events pe JOIN devices d ON d.sn=pe.sn
+     WHERE pe.event_type IN (2,3) AND pe.ts > now() - interval '1 hour' ${scope(f, p2)} ORDER BY pe.ts DESC LIMIT 20`, p2);
+  return { visits: visits.rows, passes: passes.rows };
+}
+
 async function personEvents(f) {
   const p = [];
   const limit = Math.min(Number(f.limit) || 200, 5000);
@@ -293,5 +314,5 @@ async function flowRecords(f) {
 
 module.exports = {
   ONLINE_WINDOW_MIN, DEFAULT_TZ, listLocations, listDevices, flowSeries, flowTotals, flowByLocation, flowByDevice,
-  currentOccupancy, heatmap, demographics, reidSummary, dedupSummary, personEvents, flowRecords,
+  currentOccupancy, heatmap, demographics, reidSummary, dedupSummary, personEvents, flowRecords, liveVisits,
 };
