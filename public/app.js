@@ -227,7 +227,7 @@
       ctx.save();
       ctx.font = `650 11px ${Chart.defaults.font.family}`; ctx.fillStyle = o.color || css('--text-2'); ctx.textBaseline = 'middle';
       c.getDatasetMeta(0).data.forEach((el, i) => {
-        const v = ds.data[i]; if (!v) return;
+        const v = ds.data[i]; if (v == null) return;
         const t = o.total ? `${fmt(v)} · ${pct(v, o.total)}` : fmt(v), w = ctx.measureText(t).width;
         if (o.axis === 'y') { const x = el.x + 8; if (x + w > c.width - 4) return; ctx.textAlign = 'left'; ctx.fillText(t, x, el.y); }
         else { if (el.y - 14 < chartArea.top) return; ctx.textAlign = 'center'; ctx.fillText(t, el.x, el.y - 10); }
@@ -1070,7 +1070,7 @@ POST ${O}/api/camera/dup          — өдрийн DUP (realtime + final) тай
       }
       const gTotal = s.male + s.female + s.unknown;
       setText('dbProfSub', gTotal ? `${fmt(gTotal)} зочны танигдсан шинж` : 'өгөгдөл алга');
-      setText('dbGenLegend', `<span style="--c:var(--c1)">Эр ${fmt(s.male)} (${pct(s.male, gTotal)})</span><span style="--c:var(--c4)">Эм ${fmt(s.female)} (${pct(s.female, gTotal)})</span>${s.unknown ? `<span style="--c:var(--c-ctx)">Тодорхойгүй ${fmt(s.unknown)}</span>` : ''}`);
+      setText('dbGenLegend', `<span style="--c:var(--c1)">Эр ${fmt(s.male)} (${pct(s.male, gTotal)})</span><span style="--c:var(--c4)">Эм ${fmt(s.female)} (${pct(s.female, gTotal)})</span><span style="--c:var(--c-ctx)">Тодорхойгүй ${fmt(s.unknown)} (${pct(s.unknown, gTotal)})</span>`);
       // Сегмент хооронд 2px гадаргууны завсар; нэр, тоо, хувь нь доорх тайлбарт бүтнээрээ
       if (!setChart('cGender', null, [[s.male, s.female, s.unknown]])) {
         mk('cGender', { type: 'doughnut', data: { labels: ['Эрэгтэй', 'Эмэгтэй', 'Тодорхойгүй'],
@@ -1080,9 +1080,9 @@ POST ${O}/api/camera/dup          — өдрийн DUP (realtime + final) тай
       }
       // Нас, өндөр: эрэмбэтэй бүлэг тул нэг өнгийн шатлал (цайнаас бараан) — өөр өөр өнгө
       // өгвөл баганын уртыг өнгөөр давхар кодолж, өнгө нь утгагүй болно. «Тодорхойгүй» нь
-      // эрэмбэд ордоггүй тул саарал, мөн тоо нь 0 бол огт харуулахгүй.
+      // эрэмбэд ордоггүй тул саарал; таних чанар хэр байгааг харуулах тул 0 байсан ч гарна.
       const bandChart = (id, bands, data, ramp, sub) => {
-        const keep = data.map((v, i) => i).filter((i) => i < bands.length - 1 || data[i] > 0);
+        const keep = data.map((v, i) => i);
         const vals = keep.map((i) => data[i]), total = data.reduce((a, b) => a + b, 0);
         setText(sub, total ? `${fmt(total)} зочин` : 'өгөгдөл алга');
         // Багануудын бүрэлдэхүүн өөрчлөгдвөл (жишээ нь «Тодорхойгүй» шинээр гарч ирвэл)
