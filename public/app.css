@@ -197,6 +197,13 @@ tbody tr { transition: background .1s; } tbody tr:hover td { background: var(--s
 tbody tr.live-row td { background: color-mix(in srgb, var(--good) 9%, var(--surface)); font-weight: 500; }
 tbody tr.live-row td:first-child { box-shadow: inset 3px 0 0 var(--good); }
 tbody tr.live-row .pill { padding: 1px 7px; font-size: 10.5px; }
+/* Хүснэгтийн гарчиг дээрх шүүлтүүрийн мөр */
+thead tr.fltr th { top: 39px; padding: 6px 6px; z-index: 1; }
+.fltr input, .fltr select { width: 100%; min-width: 72px; height: 30px; padding: 4px 7px; font-size: 12px; font-weight: 400; letter-spacing: normal; text-transform: none; color: var(--text); border-radius: 7px; }
+.fltr select { min-width: 92px; padding-right: 22px; background-position: right 5px center; }
+.fltr input[type=number] { min-width: 56px; }
+.fltr .fr { display: grid; gap: 4px; } /* огноо: эхлэх/дуусах доош нь — багана нарийн байлгах */
+.fltr .fr input { min-width: 112px; }
 .tbl-wrap { overflow-x: auto; margin: 0 -20px; padding: 0 20px; }
 .tbl-wrap table { min-width: 0; }
 @media (max-width: 860px) { .tbl-wrap table { min-width: 520px; } }
