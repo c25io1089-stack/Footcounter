@@ -176,6 +176,34 @@
   function mk(id, cfg) { const el = $('#' + id); if (!el) return; if (charts[id]) charts[id].destroy(); charts[id] = new Chart(el, cfg); }
   // Багана бүрийн утгыг үзүүр дээр нь бичнэ (цөөн баганатай график дээр л — бүх цэг дээр биш).
   // Багтахгүй бол алгасна: тэмдэглэгээндээ тасрахаас тайлбаргүй байсан нь дээр.
+  // Шугамын төгсгөлд цувралын нэрийг шууд бичнэ (өнгө тааруулж хайхгүйгээр уншина).
+  // Нэр нь текстийн өнгөтэй, ялгах өнгийг хажуугийн цэг үүрнэ; ойролцоо байвал зөрүүлнэ.
+  const lineEnds = {
+    id: 'lineEnds',
+    afterDatasetsDraw(c, a, o) {
+      const { ctx, chartArea } = c, items = [];
+      c.data.datasets.forEach((ds, i) => {
+        const m = c.getDatasetMeta(i); if (m.hidden || !m.data.length) return;
+        const p = m.data[m.data.length - 1];
+        if (p.x < chartArea.left) return;
+        items.push({ y: p.y, t: ds.label, c: ds.borderColor });
+      });
+      if (!items.length) return;
+      items.sort((m, n) => m.y - n.y);
+      const gap = 15;
+      for (let i = 1; i < items.length; i++) if (items[i].y - items[i - 1].y < gap) items[i].y = items[i - 1].y + gap;
+      const over = items[items.length - 1].y - chartArea.bottom;
+      if (over > 0) items.forEach((m) => { m.y -= over; });
+      ctx.save();
+      ctx.font = `650 11px ${Chart.defaults.font.family}`; ctx.textBaseline = 'middle'; ctx.textAlign = 'left';
+      const x = chartArea.right + 9;
+      items.forEach((m) => {
+        ctx.fillStyle = m.c; ctx.beginPath(); ctx.arc(x + 3, m.y, 3.5, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = o.color || css('--text-2'); ctx.fillText(m.t, x + 12, m.y);
+      });
+      ctx.restore();
+    },
+  };
   const barValues = {
     id: 'barValues',
     afterDatasetsDraw(c, a, o) {
@@ -1002,34 +1030,36 @@ POST ${O}/api/camera/dup          — өдрийн DUP (realtime + final) тай
         kpi({ label: 'Одоо дотор байгаа', value: fmt(ov.occupancy.total), sub: ov.occupancy.devices.some((x) => x.from_snapshot) ? 'төхөөрөмжийн тоолол' : 'орсон − гарсан', ico: 'people', c: 3 }),
       ].join(''));
       const byB = new Map();
-      for (const r of data.rows) { const k = bKey(r.bucket); const o = byB.get(k) || { k, in: 0, out: 0 }; o.in += r.in_count; o.out += r.out_count; byB.set(k, o); }
+      for (const r of data.rows) { const k = bKey(r.bucket); const o = byB.get(k) || { k, in: 0, out: 0, pass: 0 }; o.in += r.in_count; o.out += r.out_count; o.pass += r.passby; byB.set(k, o); }
       const buckets = [...byB.values()].sort((a, b) => (a.k < b.k ? -1 : 1)).slice(-48);
-      const labels = buckets.map((b) => b.k.slice(11, 16)), ins = buckets.map((b) => b.in), outs = buckets.map((b) => b.out);
+      const labels = buckets.map((b) => b.k.slice(11, 16)), ins = buckets.map((b) => b.in), outs = buckets.map((b) => b.out), passes = buckets.map((b) => b.pass);
       const cur = curBucketKey(), last = buckets[buckets.length - 1];
       setText('dbFlowSub', buckets.length ? `сүүлийн ${buckets.length} үе${last && last.k === cur ? ` · одоогийн үе: ${fmt(last.in)} орсон` : ''}` : 'өгөгдөл алга');
-      if (!setChart('cFlow30', labels, [ins, outs])) {
-        // Зөвхөн Орсон/Гарсан. «Өнгөрсөн» нь 10-15 дахин том тоо тул нэг тэнхлэг дээр
-        // нийлүүлбэл энэ хоёрыг шалан дээр дарчихдаг — тэр үзүүлэлт дээд талын KPI-д бий.
-        mk('cFlow30', { data: { labels, datasets: [
-          { type: 'bar', label: 'Орсон', data: ins, backgroundColor: css('--c1'), categoryPercentage: .72, barPercentage: .88 },
-          { type: 'bar', label: 'Гарсан', data: outs, backgroundColor: css('--c2'), categoryPercentage: .72, barPercentage: .88 },
+      if (!setChart('cFlow30', labels, [ins, outs, passes])) {
+        // Гурвуулаа нэг хэмжигдэхүүн (хүний тоо) тул нэг тэнхлэг дээр 3 зураас.
+        // «Өнгөрсөн» нь 10-15 дахин том тоо тул орсон/гарсан доогуураа нягт явна —
+        // тэр хоёрын яг тоог KPI, Өгөгдлийн хүснэгт, hover-ийн тайлбараас харна.
+        const ln = (label, data, color) => ({ label, data, borderColor: color, backgroundColor: color, fill: false, tension: .35, pointHoverBackgroundColor: color });
+        mk('cFlow30', { type: 'line', data: { labels, datasets: [
+          ln('Орсон', ins, css('--c1')), ln('Гарсан', outs, css('--c2')), ln('Өнгөрсөн', passes, css('--c3')),
         ] },
         options: { responsive: true, maintainAspectRatio: false, animation: false, interaction: { mode: 'index', intersect: false },
-          layout: { padding: { top: 2 } },
+          layout: { padding: { top: 2, right: 82 } },
           scales: { x: { grid: { display: false }, border: { color: css('--border') }, ticks: { maxTicksLimit: 8, autoSkipPadding: 16 } },
             y: { beginAtZero: true, grid: { color: css('--border'), drawTicks: false }, border: { display: false }, ticks: { precision: 0, maxTicksLimit: 5 } } },
-          plugins: { legend: { position: 'top', align: 'end' } } } });
+          plugins: { legend: { position: 'top', align: 'end' }, lineEnds: { color: css('--text-2') } } },
+        plugins: [lineEnds] });
       }
       const gTotal = s.male + s.female + s.unknown;
       setText('dbGenSub', gTotal ? `${fmt(gTotal)} зочин · дундаж өндөр ${s.people ? Math.round(s.hsum / s.people) + ' см' : '—'}` : 'өгөгдөл алга');
-      setText('dbGenLegend', `<span style="--c:var(--c1)">Эр ${fmt(s.male)} (${pct(s.male, gTotal)})</span><span style="--c:var(--c3)">Эм ${fmt(s.female)} (${pct(s.female, gTotal)})</span>${s.unknown ? `<span style="--c:var(--c-ctx)">Тодорхойгүй ${fmt(s.unknown)}</span>` : ''}`);
+      setText('dbGenLegend', `<span style="--c:var(--c1)">Эр ${fmt(s.male)} (${pct(s.male, gTotal)})</span><span style="--c:var(--c4)">Эм ${fmt(s.female)} (${pct(s.female, gTotal)})</span>${s.unknown ? `<span style="--c:var(--c-ctx)">Тодорхойгүй ${fmt(s.unknown)}</span>` : ''}`);
       // Бүхэлд эзлэх хувь → хэвтээ давхарласан багана. Цагираг нь ойролцоо хоёр утгыг
       // (эр/эм ойролцоо гардаг) харьцуулахад муу; нэрс, тоо нь доорх тайлбарт бүтнээрээ байна.
       if (!setChart('cGender', null, [[s.male], [s.female], [s.unknown]])) {
         const gap = { borderColor: css('--surface'), borderWidth: 1, borderRadius: 4, borderSkipped: false, maxBarThickness: 30 };
         mk('cGender', { type: 'bar', data: { labels: [''], datasets: [
           { label: 'Эрэгтэй', data: [s.male], backgroundColor: css('--c1'), ...gap },
-          { label: 'Эмэгтэй', data: [s.female], backgroundColor: css('--c3'), ...gap },
+          { label: 'Эмэгтэй', data: [s.female], backgroundColor: css('--c4'), ...gap },
           { label: 'Тодорхойгүй', data: [s.unknown], backgroundColor: css('--c-ctx'), ...gap },
         ] },
           options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, animation: false,
