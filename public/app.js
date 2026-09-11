@@ -1004,7 +1004,6 @@ POST ${O}/api/camera/dup          — өдрийн DUP (realtime + final) тай
           <div class="prof"><h3>Өндөр <span class="sub muted" id="dbHgtSub"></span></h3>
             <div class="chart-wrap bar5"><canvas id="cHeight"></canvas></div></div>
         </div></div>
-      <div class="card section"><div class="head"><h2>Байршлаар</h2><span class="sub">орсон хүн</span></div><div class="tbl-wrap"><table><thead><tr><th>Байршил</th><th class="num">Орсон</th><th class="num">Гарсан</th><th style="width:30%"></th></tr></thead><tbody id="dbLoc"></tbody></table></div></div>
       <div class="card section"><div class="head"><h2>Долоо хоногийн өдөр × цаг</h2><span class="sub">орсон хүний нягтрал</span></div><div id="heat"></div></div>`;
     $('#dbFs').onclick = toggleFs;
     const clock = () => setText('dbClock', clockText());
@@ -1098,8 +1097,6 @@ POST ${O}/api/camera/dup          — өдрийн DUP (realtime + final) тай
       bandChart('cHeight', H_BANDS, s.hgt, ['--h1', '--h2', '--h3', '--h4'], 'dbHgtSub');
       const hTotal = s.hgt.reduce((a, b) => a + b, 0) - s.hgt[H_BANDS.length - 1];
       setText('dbHgtSub', hTotal ? `${fmt(hTotal)} зочин · дундаж ${s.people ? Math.round(s.hsum / s.people) : '—'} см` : 'өгөгдөл алга');
-      const topIn = ov.by_location[0] ? ov.by_location[0].in_count : 0;
-      setText('dbLoc', ov.by_location.map((l) => `<tr><td><b>${esc(l.location_name)}</b><br><span class="small muted">${l.online_count}/${l.device_count} online</span></td><td class="num">${fmt(l.in_count)}</td><td class="num">${fmt(l.out_count)}</td><td><div class="bar"><i style="width:${pct(l.in_count, topIn)}"></i></div></td></tr>`).join('') || '<tr><td colspan="4" class="empty">Байршил алга</td></tr>');
       const lu = $('#lastUpd'); if (lu) lu.textContent = 'Шинэчилсэн ' + clockText();
     }
     clock(); await tick();

@@ -248,7 +248,6 @@ th.fh > span { vertical-align: middle; }
 .muted { color: var(--muted); }
 .small { font-size: 12px; }
 .empty { padding: 36px 20px; text-align: center; color: var(--muted); }
-.bar { height: 6px; background: var(--surface-3); border-radius: 4px; overflow: hidden; } .bar i { display: block; height: 100%; background: linear-gradient(90deg, var(--s1), #8b5cf6); border-radius: 4px; transition: width .4s ease; }
 
 /* ============ Skeleton ============ */
 .skeleton { position: relative; overflow: hidden; background: var(--surface-2); border-radius: 10px; }
