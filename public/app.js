@@ -1014,6 +1014,51 @@ POST ${O}/api/camera/dup          — өдрийн DUP (realtime + final) тай
   // '14:30' → '14:30–15:00'
   const tLabel = (v) => { const e = new Date(2000, 0, 1, +v.slice(0, 2), +v.slice(3, 5) + 30); return `${v}–${String(e.getHours()).padStart(2, '0')}:${String(e.getMinutes()).padStart(2, '0')}`; };
 
+  // Дүнгийн нүдийг задаргаа нээх товч болгоно (datagrid-ийн clickable-amount конвенц)
+  function drillCell(p) {
+    if (p.value == null || !p.data) return '';
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'drill'; b.title = 'Задаргааг харах'; b.textContent = fmt(p.value);
+    b.onclick = () => intervalModal(p.data);
+    return b;
+  }
+
+  // Нэг 30 минутын интервалын зочны задаргаа. Бүх тоо нь мөрөндөө байгаа тул
+  // сервер рүү дахин хүсэлт хэрэггүй.
+  function intervalModal(r) {
+    const t = bKey(r.bucket).slice(11, 16);
+    const gen = [['male', 'Эрэгтэй', '--c1'], ['female', 'Эмэгтэй', '--c4'], ['gender_unknown', 'Тодорхойгүй', '--c-ctx']];
+    const gTotal = gen.reduce((a, [k]) => a + (r[k] || 0), 0);
+    const bars = (items, total) => {
+      const max = Math.max(1, ...items.map(([, , , v]) => v));
+      return `<div class="bband">${items.map(([, label, color, v]) => `<div class="l">${esc(label)}</div>
+        <div class="t"><i style="width:${(v / max * 100).toFixed(1)}%;background:var(${color})"></i></div>
+        <b>${fmt(v)} · ${pct(v, total)}</b>`).join('')}</div>`;
+    };
+    const ageRamp = ['--o1', '--o2', '--o3', '--o4', '--o5', '--c-ctx'];
+    const hRamp = ['--h1', '--h2', '--h3', '--h4', '--c-ctx'];
+    const ageItems = A_BANDS.map((b, i) => [b[0], b[1], ageRamp[i], r['age_' + b[0]] || 0]);
+    const hItems = H_BANDS.map((b, i) => [b[0], b[1], hRamp[i], r['h_' + b[0]] || 0]);
+    const aTotal = ageItems.reduce((a, x) => a + x[3], 0), hTotal = hItems.reduce((a, x) => a + x[3], 0);
+    const kv = (k, v) => `<div><span class="k">${k}</span><span class="v">${v}</span></div>`;
+    modal(`<h2>${bDate(r.bucket)} · ${esc(tLabel(t))}</h2>
+      <div class="det-top"><b>${esc(r.device_name || r.sn)}</b><span class="muted">${esc(r.location_name || '—')}</span></div>
+      <div class="kv">
+        ${kv('Орсон', `<b>${fmt(r.in_count)}</b>`)}${kv('Гарсан', fmt(r.out_count))}
+        ${kv('Буцсан', fmt(r.turnback))}${kv('Өнгөрсөн', fmt(r.passby))}
+        ${kv('Бүсэд байсан', dur(r.avg_stay_ms))}${kv('Дундаж өндөр', r.avg_height_cm ? r.avg_height_cm + ' см' : '—')}
+      </div>
+      ${gTotal || aTotal || hTotal ? `
+        <h3 class="sub-h">Хүйс <span class="sub muted">${fmt(gTotal)} зочин</span></h3>
+        ${bars(gen.map(([k, label, color]) => [k, label, color, r[k] || 0]), gTotal)}
+        <h3 class="sub-h">Насны бүлэг <span class="sub muted">${fmt(aTotal)} зочин</span></h3>
+        ${bars(ageItems, aTotal)}
+        <h3 class="sub-h">Өндөр <span class="sub muted">${fmt(hTotal)} зочин</span></h3>
+        ${bars(hItems, hTotal)}`
+      : '<p class="muted small" style="margin:16px 0 0">Энэ интервалд хүн тус бүрийн шинж (хүйс, нас, өндөр) ирээгүй байна — төхөөрөмж зөвхөн нийлбэр тоогоо илгээсэн.</p>'}`,
+      (bg) => bg.querySelector('.modal').classList.add('wide'));
+  }
+
   async function pageData() {
     const f = state.dataF || (state.dataF = dFresh());
     $('#page').innerHTML = `
@@ -1027,17 +1072,14 @@ POST ${O}/api/camera/dup          — өдрийн DUP (realtime + final) тай
     const cols = [
       { field: 'bucket', headerName: 'Огноо', width: 128, valueFormatter: (p) => bDate(p.value), sort: 'desc' },
       { colId: 'time', headerName: 'Цаг', width: 136, valueGetter: (p) => bKey(p.data.bucket).slice(11, 16), valueFormatter: (p) => tLabel(p.value) },
-      { field: 'in_count', headerName: 'Орсон', ...numCol, cellClass: 'g-strong' },
-      { field: 'out_count', headerName: 'Гарсан', ...numCol },
+      { field: 'in_count', headerName: 'Орсон', ...numCol, cellClass: 'g-strong', cellRenderer: drillCell,
+        headerTooltip: 'Дарвал тухайн 30 минутын зочны задаргаа (хүйс, нас, өндөр) нээгдэнэ' },
+      { field: 'out_count', headerName: 'Гарсан', ...numCol, cellRenderer: drillCell,
+        headerTooltip: 'Дарвал тухайн 30 минутын зочны задаргаа (хүйс, нас, өндөр) нээгдэнэ' },
       { field: 'turnback', headerName: 'Буцсан', ...numCol },
       { field: 'passby', headerName: 'Өнгөрсөн', ...numCol },
       { field: 'avg_stay_ms', headerName: 'Бүсэд байсан', ...numCol, width: 130, valueFormatter: (p) => dur(p.value),
         headerTooltip: 'Тоолох бүсэд байсан дундаж хугацаа — төхөөрөмжийн хэмжсэн (дэлгүүрт байсан хугацаа биш)' },
-      { field: 'male', headerName: 'Эр', ...numCol, width: 86 },
-      { field: 'female', headerName: 'Эм', ...numCol, width: 86 },
-      { field: 'gender_unknown', headerName: 'Хүйс тодорхойгүй', ...numCol, width: 140 },
-      { field: 'avg_height_cm', headerName: 'Өндөр (см)', ...numCol, width: 116 },
-      { colId: 'age', headerName: 'Нас', width: 100, valueGetter: (p) => (p.data.age_min == null ? null : `${p.data.age_min}–${p.data.age_max}`) },
       { colId: 'device', headerName: 'Төхөөрөмж', width: 170, valueGetter: (p) => p.data.device_name || p.data.sn },
       { field: 'sn', headerName: 'SN', width: 170, cellClass: 'g-mono' },
       { field: 'location_name', headerName: 'Байршил', width: 150 },

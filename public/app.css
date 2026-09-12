@@ -222,6 +222,18 @@ tbody tr.live-row .pill { padding: 1px 7px; font-size: 10.5px; }
 .dt-range { display: inline-flex; align-items: center; gap: 6px; font-weight: 500; color: var(--text-2); }
 .dt-range input { height: 34px; font-size: 12.5px; }
 
+/* Задаргаа нээдэг дүнгийн нүд */
+.grid-wrap .drill { width: 100%; padding: 0; border: 0; background: transparent; color: inherit; font: inherit; text-align: right; cursor: pointer;
+  text-decoration: underline dotted var(--border-strong); text-underline-offset: 4px; transition: color .12s, text-decoration-color .12s; }
+.grid-wrap .drill:hover { color: var(--accent); text-decoration-color: var(--accent); }
+
+/* Интервалын задаргааны мөрүүд */
+.bband { display: grid; grid-template-columns: minmax(90px, auto) 1fr minmax(92px, auto); align-items: center; gap: 7px 12px; }
+.bband .l { font-size: 12.5px; color: var(--text-2); }
+.bband .t { height: 10px; border-radius: 5px; background: var(--surface-2); overflow: hidden; }
+.bband .t i { display: block; height: 100%; border-radius: 5px; }
+.bband b { font-size: 12px; font-weight: 650; color: var(--text-2); text-align: right; font-variant-numeric: tabular-nums; }
+
 /* ComboFilter — оператор + хайлттай checkbox жагсаалт */
 .combo-filter { width: 252px; padding: 10px; font-size: 12px; color: var(--text); background: var(--surface); }
 .cf-label { display: flex; align-items: center; justify-content: space-between; min-height: 20px; margin-bottom: 5px; color: var(--muted); font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; }
