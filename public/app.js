@@ -1106,7 +1106,7 @@ POST ${O}/api/camera/dup          — өдрийн DUP (realtime + final) тай
     $('#page').innerHTML = `
       <div id="dbNotice"></div>
       <div class="grid g-kpi hero" id="dbKpi"></div>
-      <div class="card section"><div class="head"><h2>Урсгал — 30 минутаар</h2><span class="sub" id="dbFlowSub"></span></div><div class="chart-wrap"><canvas id="cFlow30"></canvas></div></div>
+      <div class="card section"><div class="head"><h2 id="dbFlowTitle">Урсгал</h2><span class="sub" id="dbFlowSub"></span></div><div class="chart-wrap"><canvas id="cFlow30"></canvas></div></div>
       <div class="card section"><div class="head"><h2>Зочны бүтэц</h2><span class="sub" id="dbProfSub"></span></div>
         <div class="grid g-3">
           <div class="prof"><h3>Хүйс</h3>
@@ -1125,9 +1125,12 @@ POST ${O}/api/camera/dup          — өдрийн DUP (realtime + final) тай
     async function tick() {
       if (document.hidden || state.page !== 'dashboard') return;
       const { days } = rangeDates();
+      // Сонгосон хугацаанд тохирсон нарийвчлал. Өмнө нь ямар ч хугацаанд сүүлийн 48
+      // хагас цагийг л зурдаг байсан тул «7 хоног» сонгосон ч зөвхөн сүүлийн өдөр харагддаг байв.
+      const G = days <= 1 ? 'min30' : days <= 2 ? 'hour' : days <= 120 ? 'day' : 'week';
       let ov, data;
       try {
-        const jobs = [api('/dash/overview' + qs({ granularity: 'day' })), api('/dash/data' + qs({ limit: 400 }))];
+        const jobs = [api('/dash/overview' + qs({ granularity: G === 'min30' ? 'hour' : G })), api('/dash/data' + qs({ limit: 2000 }))];
         if (!prev) jobs.push(api('/dash/flow/totals' + qs({ from: shift(rangeDates().from, -days), to: rangeDates().from })));
         if (!heatDone) jobs.push(api('/dash/flow/heatmap' + qs()));
         const out = await Promise.all(jobs);
@@ -1150,12 +1153,23 @@ POST ${O}/api/camera/dup          — өдрийн DUP (realtime + final) тай
         t.store_dwell_n ? kpi({ label: 'Байх хугацаа', value: durLong(t.store_dwell_ms), sub: `${fmt(t.store_dwell_n)} зочин · орсноос гарах хүртэл`, ico: 'clock', c: 7 }) : '',
         kpi({ label: 'Одоо дотор байгаа', value: fmt(ov.occupancy.total), sub: ov.occupancy.devices.some((x) => x.from_snapshot) ? 'төхөөрөмжийн тоолол' : 'орсон − гарсан', ico: 'people', c: 3 }),
       ].join(''));
-      const byB = new Map();
-      for (const r of data.rows) { const k = bKey(r.bucket); const o = byB.get(k) || { k, in: 0, out: 0, pass: 0 }; o.in += r.in_count; o.out += r.out_count; o.pass += r.passby; byB.set(k, o); }
-      const buckets = [...byB.values()].sort((a, b) => (a.k < b.k ? -1 : 1)).slice(-48);
-      const labels = buckets.map((b) => b.k.slice(11, 16)), ins = buckets.map((b) => b.in), outs = buckets.map((b) => b.out), passes = buckets.map((b) => b.pass);
+      // 1 хоног → 30 минутын мөрүүдээс өөрсдөө нэгтгэнэ; бусад үед серверийн нэгтгэсэн
+      // цуваа (ov.series) — мөрийн хязгаараас болж тайрагдахгүй.
+      let buckets;
+      if (G === 'min30') {
+        const byB = new Map();
+        for (const r of data.rows) { const k = bKey(r.bucket); const o = byB.get(k) || { k, in: 0, out: 0, pass: 0 }; o.in += r.in_count; o.out += r.out_count; o.pass += r.passby; byB.set(k, o); }
+        buckets = [...byB.values()].sort((a, b) => (a.k < b.k ? -1 : 1)).slice(-48);
+      } else {
+        buckets = (ov.series || []).map((r) => ({ k: bKey(r.bucket), in: r.in_count, out: r.out_count, pass: r.passby }))
+          .sort((a, b) => (a.k < b.k ? -1 : 1));
+      }
+      const GLAB = { min30: '30 минутаар', hour: 'цагаар', day: 'өдрөөр', week: '7 хоногоор' };
+      setText('dbFlowTitle', `Урсгал — ${GLAB[G]}`);
+      const lab = (k) => (G === 'min30' ? k.slice(11, 16) : G === 'hour' ? k.slice(11, 13) + ':00' : `${k.slice(8, 10)}.${k.slice(5, 7)}`);
+      const labels = buckets.map((b) => lab(b.k)), ins = buckets.map((b) => b.in), outs = buckets.map((b) => b.out), passes = buckets.map((b) => b.pass);
       const cur = curBucketKey(), last = buckets[buckets.length - 1];
-      setText('dbFlowSub', buckets.length ? `сүүлийн ${buckets.length} үе${last && last.k === cur ? ` · одоогийн үе: ${fmt(last.in)} орсон` : ''}` : 'өгөгдөл алга');
+      setText('dbFlowSub', buckets.length ? `${fmt(buckets.length)} цэг${G === 'min30' && last && last.k === cur ? ` · одоогийн үе: ${fmt(last.in)} орсон` : ''}` : 'өгөгдөл алга');
       if (!setChart('cFlow30', labels, [ins, outs, passes])) {
         // Гурвуулаа нэг хэмжигдэхүүн (хүний тоо) тул нэг тэнхлэг дээр 3 зураас.
         // «Өнгөрсөн» нь 10-15 дахин том тоо тул орсон/гарсан доогуураа нягт явна —
