@@ -117,14 +117,34 @@ async function dataBuckets(f) {
        count(*) FILTER (WHERE coalesce(pp.workcard,0)=1)::int AS staff,
        count(*) FILTER (WHERE coalesce(pp.wheelchair,0)=1)::int AS wheelchair
      FROM person pp GROUP BY 1,2`, p2);
+  // Дэлгүүрт байсан хугацаа интервалаар: ижил хүний орох→гарах хосыг ГАРСАН үеийнх нь
+  // интервалд оноож дундажлана («энэ үед гарсан хүмүүс дунджаар ийм удаан байсан»).
+  const p3 = [tz];
+  const dwell = await query(
+    `WITH pair AS (
+       SELECT pe.sn, (pe.ts AT TIME ZONE $1)::date AS d, coalesce(pe.person_id, pe.id_index) AS pkey,
+         min(pe.ts) FILTER (WHERE pe.event_type=0) AS t_in, max(pe.ts) FILTER (WHERE pe.event_type=1) AS t_out
+       FROM person_events pe JOIN devices d ON d.sn=pe.sn
+       WHERE coalesce(pe.person_id, pe.id_index) IS NOT NULL AND coalesce(pe.workcard,0)=0 ${scope(f, p3)} ${range(f, p3, 'pe.ts')}
+       GROUP BY 1,2,3)
+     SELECT ${B('pp.t_out')} AS bucket, pp.sn, count(*)::int AS dwell_n,
+       avg(extract(epoch FROM (pp.t_out - pp.t_in)) * 1000)::bigint AS dwell_ms
+     FROM pair pp
+     WHERE pp.t_in IS NOT NULL AND pp.t_out IS NOT NULL AND pp.t_out > pp.t_in AND pp.t_out - pp.t_in < interval '12 hours'
+     GROUP BY 1,2`, p3);
   const key = (b, sn) => `${String(b).replace(' ', 'T').slice(0, 19)}|${sn}`;
   const map = new Map();
-  const blank = { in_count: 0, out_count: 0, passby: 0, turnback: 0, avg_stay_ms: 0, people: 0, male: 0, female: 0, gender_unknown: 0, avg_height_cm: null, age_min: null, age_max: null, age_0_16: 0, age_17_30: 0, age_31_45: 0, age_46_60: 0, age_61p: 0, age_unknown: 0, h_u150: 0, h_150_164: 0, h_165_179: 0, h_180p: 0, h_unknown: 0, staff: 0, wheelchair: 0 };
+  const blank = { in_count: 0, out_count: 0, passby: 0, turnback: 0, avg_stay_ms: 0, people: 0, male: 0, female: 0, gender_unknown: 0, avg_height_cm: null, age_min: null, age_max: null, age_0_16: 0, age_17_30: 0, age_31_45: 0, age_46_60: 0, age_61p: 0, age_unknown: 0, h_u150: 0, h_150_164: 0, h_165_179: 0, h_180p: 0, h_unknown: 0, staff: 0, wheelchair: 0, dwell_n: 0, dwell_ms: null };
   for (const r of flow.rows) map.set(key(r.bucket, r.sn), { ...blank, ...r, bucket: String(r.bucket).replace(' ', 'T').slice(0, 19) });
   for (const r of demo.rows) {
     const k = key(r.bucket, r.sn);
     const cur = map.get(k) || { ...blank, bucket: String(r.bucket).replace(' ', 'T').slice(0, 19), sn: r.sn, device_name: null, location_name: null };
     map.set(k, { ...cur, ...r, bucket: cur.bucket, device_name: cur.device_name, location_name: cur.location_name });
+  }
+  for (const r of dwell.rows) {
+    const k = key(r.bucket, r.sn);
+    const cur = map.get(k);
+    if (cur) map.set(k, { ...cur, dwell_n: r.dwell_n, dwell_ms: Number(r.dwell_ms) });
   }
   const rows = [...map.values()].sort((a, b) => (a.bucket < b.bucket ? 1 : a.bucket > b.bucket ? -1 : 0)).slice(0, limit);
   return { rows, tz, now: new Date().toISOString() };

@@ -1046,7 +1046,7 @@ POST ${O}/api/camera/dup          — өдрийн DUP (realtime + final) тай
       <div class="kv">
         ${kv('Орсон', `<b>${fmt(r.in_count)}</b>`)}${kv('Гарсан', fmt(r.out_count))}
         ${kv('Буцсан', fmt(r.turnback))}${kv('Өнгөрсөн', fmt(r.passby))}
-        ${kv('Бүсэд байсан', dur(r.avg_stay_ms))}${kv('Дундаж өндөр', r.avg_height_cm ? r.avg_height_cm + ' см' : '—')}
+        ${kv('Дэлгүүрт байсан', r.dwell_n ? `${durLong(r.dwell_ms)} <span class="muted small">${fmt(r.dwell_n)} зочин</span>` : '<span class="muted" title="Энэ үед гарсан хүмүүсийн орох үйл явдалтай нь хослуулж чадсангүй">—</span>')}${kv('Дундаж өндөр', r.avg_height_cm ? r.avg_height_cm + ' см' : '—')}
       </div>
       ${gTotal || aTotal || hTotal ? `
         <h3 class="sub-h">Хүйс <span class="sub muted">${fmt(gTotal)} зочин</span></h3>
