@@ -292,7 +292,6 @@
     ['dashboard', 'Хяналтын самбар', 'M3 13h8V3H3v10zm10 8h8V11h-8v10zM3 21h8v-6H3v6zm10-18v6h8V3h-8z', 'Урсгал, зочны бүтэц — бодит цагт (10 сек тутам)'],
     ['data', 'Өгөгдөл', 'M3 4h18v4H3V4zm0 6h8v4H3v-4zm10 0h8v4h-8v-4zM3 16h8v4H3v-4zm10 0h8v4h-8v-4z', '30 минутын нэгтгэл — орсон, гарсан, нас, хүйс, өндөр'],
     ['devices', 'Төхөөрөмж', 'M4 6h16v10H4zM2 18h20v2H2z', 'Online/offline төлөв, холболт, firmware, тохиргоо'],
-    ['reid', 'Давхардалгүй зочид', 'M12 4a4 4 0 110 8 4 4 0 010-8zm0 10c4.4 0 8 1.8 8 4v2H4v-2c0-2.2 3.6-4 8-4z', 'REID-ээр танигдсан давхардалгүй зочид, давтан ирэлт, байх хугацаа'],
     ['settings', 'Тохиргоо', 'M19.4 13a7.7 7.7 0 000-2l2.1-1.6-2-3.5-2.5 1a7.4 7.4 0 00-1.7-1L15 3H9l-.4 2.7a7.4 7.4 0 00-1.7 1l-2.5-1-2 3.5L4.6 11a7.7 7.7 0 000 2l-2.1 1.6 2 3.5 2.5-1c.5.4 1.1.7 1.7 1L9 21h6l.4-2.7c.6-.3 1.2-.6 1.7-1l2.5 1 2-3.5L19.4 13zM12 15.5a3.5 3.5 0 110-7 3.5 3.5 0 010 7z', 'Байршил, хэрэглэгч, API түлхүүр, API баримт'],
   ];
   let NAV = NAV_TENANT;
@@ -626,36 +625,6 @@ Interface (анхдагч зөв бол хөндөхгүй):
       <form class="form" id="f"><div class="row"><label>Эхлэх<input type="date" name="from" required value="${ubDate(-7)}"></label><label>Дуусах<input type="date" name="to" required value="${ubDate(0)}"></label></div>
       <div class="actions"><button type="button" class="btn" data-close>Болих</button><button class="btn primary">Хүсэлт илгээх</button></div></form>`,
       (bg, close) => { bg.querySelector('[data-close]').onclick = close; bg.querySelector('#f').onsubmit = async (e) => { e.preventDefault(); const f = Object.fromEntries(new FormData(e.target)); try { await api('/dash/devices/' + sn + '/resync', { method: 'POST', body: { from: f.from + 'T00:00:00+08:00', to: f.to + 'T23:59:59+08:00' } }); toast('Хүсэлт бүртгэгдлээ — дараагийн heartbeat-д илгээнэ'); close(); } catch (err) { toast(err.message, 'error'); } }; });
-  }
-
-  // ================= REID =================
-  async function pageReid() {
-    const r = await api('/dash/reid' + qs({ from: rangeDates().from.slice(0, 10), to: rangeDates().to.slice(0, 10) }));
-    const s = r.summary;
-    const order = ['<1м', '1-5м', '5-15м', '15-30м', '30-60м', '>60м'];
-    const dm = {}; r.dwell_distribution.forEach((x) => { dm[x.bucket] = x.n; });
-    $('#page').innerHTML = `
-      <div class="grid g-kpi">
-        <div class="card kpi accent"><div class="label">Давхардалгүй зочин</div><div class="value">${fmt(s.unique_visitors)}</div><span class="delta">REID-ээр танигдсан</span></div>
-        <div class="card kpi"><div class="label">Жинхэнэ зочин</div><div class="value">${fmt(s.customers)}</div><span class="delta">ажилтан ${fmt(s.staff)} · хүргэлт ${fmt(s.riders_couriers)}</span></div>
-        <div class="card kpi"><div class="label">Давтан орсон</div><div class="value">${fmt(s.repeat_visitors)}</div><span class="delta">${pct(s.repeat_visitors, s.unique_visitors)} нэг өдөрт 2+ удаа</span></div>
-        <div class="card kpi"><div class="label">Дундаж байх хугацаа</div><div class="value">${dur(s.avg_dwell_ms)}</div><span class="delta">нэг зочинд</span></div>
-        <div class="card kpi"><div class="label">Эрэгтэй / Эмэгтэй</div><div class="value">${pct(s.male, s.male + s.female)} <span class="muted" style="font-size:16px">/ ${pct(s.female, s.male + s.female)}</span></div></div>
-        <div class="card kpi"><div class="label">Насанд хүрэгч / Хүүхэд</div><div class="value">${fmt(s.adults)} <span class="muted" style="font-size:16px">/ ${fmt(s.children)}</span></div></div>
-      </div>
-      <div class="grid g-2 section">
-        <div class="card"><div class="head"><h2>Өдөр бүрийн давхардалгүй зочин</h2></div><div class="chart-wrap"><canvas id="cDaily"></canvas></div></div>
-        <div class="card"><div class="head"><h2>Байх хугацааны тархалт</h2><span class="sub">зочид</span></div><div class="chart-wrap"><canvas id="cDwell"></canvas></div></div>
-      </div>
-      <div class="card section"><div class="head"><h2>Ирсэн REID тайлангууд</h2><span class="sub">${r.reports.length} тайлан</span></div><div class="tbl-wrap"><table><thead><tr><th>Огноо</th><th>Байршил</th><th>Мастер төхөөрөмж</th><th>Чиглэл</th><th>Хамрагдсан SN</th><th class="num">Давхардалгүй</th><th>Ирсэн</th></tr></thead><tbody>
-        ${r.reports.map((x) => `<tr><td>${x.report_date}</td><td>${esc(x.location_name || '—')}</td><td>${esc(x.device_name || x.master_sn)}</td><td>${x.direction === 'in' ? 'Орсон' : 'Гарсан'}</td><td class="mono small">${x.device_sns.join(', ')}</td><td class="num"><b>${fmt(x.unique_count)}</b></td><td class="small muted">${fmtDT(x.received_at)}</td></tr>`).join('') || '<tr><td colspan="7" class="empty">REID тайлан ирээгүй. Төхөөрөмж ажлын цаг дууссаны дараа илгээнэ.</td></tr>'}
-      </tbody></table></div></div>`;
-    mk('cDaily', { type: 'bar', data: { labels: r.daily.map((x) => x.report_date.slice(5)), datasets: [
-      { label: 'Зочин', data: r.daily.map((x) => x.customers), backgroundColor: css('--s1'), borderRadius: 4 },
-      { label: 'Зочин бус', data: r.daily.map((x) => x.unique_visitors - x.customers), backgroundColor: css('--s4'), borderRadius: 4 }] },
-      options: { responsive: true, maintainAspectRatio: false, scales: { x: { stacked: true, grid: { display: false } }, y: { stacked: true, beginAtZero: true, grid: { color: css('--border') } } }, plugins: { legend: { position: 'top', align: 'end' } } } });
-    mk('cDwell', { type: 'bar', data: { labels: order, datasets: [{ label: 'Зочин', data: order.map((k) => dm[k] || 0), backgroundColor: css('--s3'), borderRadius: 4 }] },
-      options: { responsive: true, maintainAspectRatio: false, scales: { x: { grid: { display: false } }, y: { beginAtZero: true, grid: { color: css('--border') } } }, plugins: { legend: { display: false } } } });
   }
 
   // ================= SETTINGS =================
@@ -1254,7 +1223,7 @@ POST ${O}/api/camera/dup          — өдрийн DUP (realtime + final) тай
     state.liveTimers = [setInterval(tick, 10000)];
   }
 
-  const PAGES = { admin: pageAdmin, dashboard: pageDashboard, data: pageData, devices: pageDevices, reid: pageReid, settings: pageSettings };
+  const PAGES = { admin: pageAdmin, dashboard: pageDashboard, data: pageData, devices: pageDevices, settings: pageSettings };
 
   // Superadmin самбарыг 60 сек тутам (бусад хуудас өөрийн таймертай)
   setInterval(() => { if (state.user && state.page === 'admin' && !document.hidden && !document.querySelector('.modal-bg')) render(); }, 60000);
