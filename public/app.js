@@ -949,19 +949,21 @@ POST ${O}/api/camera/dup          — өдрийн DUP (realtime + final) тай
   // «14:30–15:00» — 30 минутын үеийн шошго
   const bTime = (b) => { const s = bKey(b).slice(11, 16), e = new Date(2000, 0, 1, +s.slice(0, 2), +s.slice(3, 5) + 30); return `${s}–${String(e.getHours()).padStart(2, '0')}:${String(e.getMinutes()).padStart(2, '0')}`; };
   // ---- Загварын горим: систем / гэрэл / харанхуй ----
-  const THEMES = ['auto', 'light', 'dark'];
-  const THEME_LABEL = { auto: 'Систем', light: 'Гэрэл', dark: 'Харанхуй' };
+  const THEMES = ['light', 'dark'];
+  const THEME_LABEL = { light: 'Гэрэл', dark: 'Харанхуй' };
   const THEME_ICO = {
-    auto: '<path d="M3 5h18v11H3zM8 20h8M12 16v4"/>',
     light: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M19.1 4.9l-1.4 1.4M6.3 17.7l-1.4 1.4"/>',
     dark: '<path d="M20 13.4A8 8 0 1 1 10.6 4a6.5 6.5 0 0 0 9.4 9.4z"/>',
   };
-  const themeGet = () => { try { return THEMES.includes(localStorage.getItem('footfall.theme')) ? localStorage.getItem('footfall.theme') : 'auto'; } catch { return 'auto'; } };
+  // Сонголтгүй үед системийн горимоор эхэлнэ, дараа нь зөвхөн товчоор солино
+  const themeGet = () => {
+    try { const v = localStorage.getItem('footfall.theme'); if (THEMES.includes(v)) return v; } catch { /* private mode */ }
+    return matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  };
   function themeApply(t) {
-    if (t === 'auto') delete document.documentElement.dataset.theme;
-    else document.documentElement.dataset.theme = t;
+    document.documentElement.dataset.theme = t;
     const b = $('#themeBtn');
-    if (b) { b.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${THEME_ICO[t]}</svg>`; b.title = `Загвар: ${THEME_LABEL[t]} — солихын тулд дарна`; b.setAttribute('aria-label', b.title); }
+    if (b) { b.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${THEME_ICO[t]}</svg>`; b.title = `${THEME_LABEL[t]} горим — ${THEME_LABEL[t === 'light' ? 'dark' : 'light']} болгохын тулд дарна`; b.setAttribute('aria-label', b.title); }
   }
   themeApply(themeGet());   // нэвтрэхээс өмнө ч үйлчилнэ
 
