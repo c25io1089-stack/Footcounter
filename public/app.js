@@ -321,6 +321,7 @@
           <span id="customRange" class="filters" ${state.range === 'custom' ? '' : 'hidden'}><input type="date" id="fFrom" value="${state.from}"> – <input type="date" id="fTo" value="${state.to}"></span>
           <div class="grow"></div>
           <span id="lastUpd" class="muted small"></span>
+          <button class="btn" id="wBtn" title="Самбарт харуулах үзүүлэлтээ сонгох"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M4 12h16M4 18h16"/><circle cx="9" cy="6" r="2" fill="currentColor"/><circle cx="15" cy="12" r="2" fill="currentColor"/><circle cx="8" cy="18" r="2" fill="currentColor"/></svg> Үзүүлэлт</button>
           <button class="btn icon" id="fsBtn" title="Бүтэн дэлгэц — TV/монитор дээр тавихад (гарахдаа Esc)" aria-label="Бүтэн дэлгэц">⛶</button>
           <button class="btn" id="refreshBtn" aria-label="Өгөгдөл шинэчлэх"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.6-6.4M21 3v6h-6"/></svg> Шинэчлэх</button>
         </div>
@@ -339,6 +340,7 @@
     $('#fFrom').onchange = $('#fTo').onchange = () => { state.from = $('#fFrom').value; state.to = $('#fTo').value; if (state.from && state.to) render(); };
     $('#refreshBtn').onclick = () => render();
     $('#fsBtn').onclick = toggleFs;
+    $('#wBtn').onclick = (e) => { e.stopPropagation(); widgetPanel(e.currentTarget); };
     window.onhashchange = () => render();
   }
   const roleName = (r) => ({ superadmin: 'Супер админ', admin: 'Админ', viewer: 'Үзэгч' }[r] || r);
@@ -539,6 +541,48 @@ Interface (анхдагч зөв бол хөндөхгүй):
       <h3 style="margin:14px 0 6px">Heartbeat (сүүлийн 50)</h3>
       <div class="tbl-wrap" style="max-height:32vh;overflow:auto"><table><thead><tr><th>Цаг</th><th>IP</th><th>Холболт</th><th>Firmware</th></tr></thead><tbody>${rows.map((r) => `<tr><td>${fmtDT(r.ts)}</td><td>${esc(r.payload.ipAddress || '')}</td><td>${esc(r.payload.connectionType || '')}</td><td>${esc(r.payload.swRelease || '')}</td></tr>`).join('') || '<tr><td colspan="4" class="empty">Хоосон</td></tr>'}</tbody></table></div>`);
   }
+
+  // Самбарт ямар үзүүлэлт харагдахыг хэрэглэгч өөрөө сонгоно. Сонголт нь браузерт
+  // хадгалагдана (хэрэглэгч бүрт өөрийн, серверт нөлөөлөхгүй).
+  const DB_W = [
+    ['Гол үзүүлэлт', [['k_in', 'Орсон'], ['k_out', 'Гарсан'], ['k_pass', 'Өнгөрсөн'], ['k_back', 'Буцсан'], ['k_dwell', 'Байх хугацаа'], ['k_occ', 'Одоо дотор байгаа']]],
+    ['Картууд', [['c_flow', 'Урсгалын график'], ['c_prof', 'Зочны бүтэц'], ['c_heat', 'Өдөр × цагийн нягтрал']]],
+    ['Зочны бүтцийн багана', [['p_gender', 'Хүйс'], ['p_ac', 'Насанд хүрэгч / Хүүхэд'], ['p_age', 'Насны бүлэг'], ['p_h', 'Өндөр']]],
+  ];
+  const W_KEY = 'footfall.widgets';
+  const wOff = new Set((() => { try { return JSON.parse(localStorage.getItem(W_KEY)) || []; } catch { return []; } })());
+  const wOn = (id) => !wOff.has(id);
+  const wSave = () => { try { localStorage.setItem(W_KEY, JSON.stringify([...wOff])); } catch { /* private mode */ } };
+  const wProfCols = ['p_gender', 'p_ac', 'p_age', 'p_h'];
+
+  function widgetPanel(btn) {
+    const was = document.querySelector('.wpop');
+    closeWPop();
+    if (was) return;
+    const el = document.createElement('div');
+    el.className = 'wpop';
+    el.innerHTML = `<div class="wp-head"><b>Харуулах үзүүлэлт</b><button type="button" class="btn sm ghost" data-reset>Анхдагч</button></div>
+      <div class="wp-body">${DB_W.map(([g, items]) => `<div class="wp-group"><h4>${esc(g)}</h4>${items.map(([id, label]) =>
+        `<label><input type="checkbox" data-w="${id}"${wOn(id) ? ' checked' : ''}><span>${esc(label)}</span></label>`).join('')}</div>`).join('')}</div>
+      <p class="wp-note">Сонголт энэ браузерт хадгалагдана.</p>`;
+    document.body.appendChild(el);
+    const r = btn.getBoundingClientRect();
+    el.style.top = Math.max(10, Math.min(r.bottom + 8, innerHeight - el.offsetHeight - 10)) + 'px';
+    el.style.left = Math.max(10, Math.min(r.right - el.offsetWidth, innerWidth - el.offsetWidth - 10)) + 'px';
+    el.addEventListener('change', (e) => {
+      const c = e.target.closest('[data-w]'); if (!c) return;
+      if (c.checked) wOff.delete(c.dataset.w); else wOff.add(c.dataset.w);
+      wSave(); render();
+    });
+    el.querySelector('[data-reset]').onclick = () => {
+      wOff.clear(); wSave();
+      el.querySelectorAll('[data-w]').forEach((c) => { c.checked = true; });
+      render();
+    };
+  }
+  const closeWPop = () => document.querySelectorAll('.wpop').forEach((x) => x.remove());
+  document.addEventListener('click', (e) => { if (!e.target.closest('.wpop, #wBtn')) closeWPop(); });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeWPop(); });
 
   // Мөрийн ⋮ цэс. Гадуур дарах/ESC-д хаагдана — listener-ийг нэг удаа бүртгэнэ.
   let rowMenuTrigger = null;
@@ -1196,22 +1240,23 @@ POST ${O}/api/camera/dup          — өдрийн DUP (realtime + final) тай
     if (!state.devices.length) return renderOnboarding();
     $('#page').innerHTML = `
       <div id="dbNotice"></div>
+      ${DB_W.flatMap(([, items]) => items.map((x) => x[0])).some(wOn) ? '' : `<div class="card empty-state"><div class="ico">${icon('alert')}</div><b>Бүх үзүүлэлт унтраалттай байна</b><p>Дээд талын «Үзүүлэлт» товчийг дарж самбартаа юу харахаа сонгоно уу.</p></div>`}
       <div class="grid g-kpi hero" id="dbKpi"></div>
-      <div class="card section"><div class="head"><h2 id="dbFlowTitle">Урсгал</h2><span class="sub" id="dbFlowSub"></span></div><div class="chart-wrap"><canvas id="cFlow30"></canvas></div></div>
-      <div class="card section"><div class="head"><h2>Зочны бүтэц</h2><span class="sub" id="dbProfSub"></span></div>
+      ${wOn('c_flow') ? `<div class="card section"><div class="head"><h2 id="dbFlowTitle">Урсгал</h2><span class="sub" id="dbFlowSub"></span></div><div class="chart-wrap"><canvas id="cFlow30"></canvas></div></div>` : ''}
+      ${wOn('c_prof') && wProfCols.some(wOn) ? `<div class="card section"><div class="head"><h2>Зочны бүтэц</h2><span class="sub" id="dbProfSub"></span></div>
         <div class="grid g-3">
-          <div class="prof"><h3>Хүйс</h3>
+          ${wOn('p_gender') ? `<div class="prof"><h3>Хүйс</h3>
             <div class="chart-wrap donut"><canvas id="cGender"></canvas></div>
-            <div class="legend" style="margin-top:10px" id="dbGenLegend"></div></div>
-          <div class="prof"><h3>Насанд хүрэгч / Хүүхэд <span class="sub muted" id="dbAcSub"></span></h3>
+            <div class="legend" style="margin-top:10px" id="dbGenLegend"></div></div>` : ''}
+          ${wOn('p_ac') ? `<div class="prof"><h3>Насанд хүрэгч / Хүүхэд <span class="sub muted" id="dbAcSub"></span></h3>
             <div class="chart-wrap donut"><canvas id="cAdultChild"></canvas></div>
-            <div class="legend" style="margin-top:10px" id="dbAcLegend"></div></div>
-          <div class="prof"><h3>Насны бүлэг <span class="sub muted" id="dbAgeSub"></span></h3>
-            <div class="chart-wrap bar6"><canvas id="cAge"></canvas></div></div>
-          <div class="prof"><h3>Өндөр <span class="sub muted" id="dbHgtSub"></span></h3>
-            <div class="chart-wrap bar5"><canvas id="cHeight"></canvas></div></div>
-        </div></div>
-      <div class="card section"><div class="head"><h2>Долоо хоногийн өдөр × цаг</h2><span class="sub">орсон хүний нягтрал</span></div><div id="heat"></div></div>`;
+            <div class="legend" style="margin-top:10px" id="dbAcLegend"></div></div>` : ''}
+          ${wOn('p_age') ? `<div class="prof"><h3>Насны бүлэг <span class="sub muted" id="dbAgeSub"></span></h3>
+            <div class="chart-wrap bar6"><canvas id="cAge"></canvas></div></div>` : ''}
+          ${wOn('p_h') ? `<div class="prof"><h3>Өндөр <span class="sub muted" id="dbHgtSub"></span></h3>
+            <div class="chart-wrap bar5"><canvas id="cHeight"></canvas></div></div>` : ''}
+        </div></div>` : ''}
+      ${wOn('c_heat') ? `<div class="card section"><div class="head"><h2>Долоо хоногийн өдөр × цаг</h2><span class="sub">орсон хүний нягтрал</span></div><div id="heat"></div></div>` : ''}`;
     let prev = null, heatDone = false;
     async function tick() {
       if (document.hidden || state.page !== 'dashboard') return;
@@ -1234,15 +1279,15 @@ POST ${O}/api/camera/dup          — өдрийн DUP (realtime + final) тай
       const online = ov.by_device.filter((d) => d.online).length, total = ov.by_device.length, offline = total - online;
       setText('dbNotice', offline ? `<div class="notice warn"><b>${offline} төхөөрөмж offline</b> — тоо дутуу байж болзошгүй. <a href="#devices">Төхөөрөмж хуудсанд шалгах →</a></div>` : '');
       setText('dbKpi', [
-        kpi({ label: 'Орсон', value: fmt(t.in_count), delta: { cur: t.in_count, prev: prev.in_count }, ico: 'in', c: 1, accent: true }),
-        kpi({ label: 'Гарсан', value: fmt(t.out_count), delta: { cur: t.out_count, prev: prev.out_count }, ico: 'out', c: 2 }),
-        kpi({ label: 'Өнгөрсөн', value: fmt(t.passby), delta: { cur: t.passby, prev: prev.passby }, ico: 'pass', c: 4 }),
-        kpi({ label: 'Буцсан', value: fmt(t.turnback), delta: { cur: t.turnback, prev: prev.turnback }, ico: 'back', c: 5 }),
+        wOn('k_in') ? kpi({ label: 'Орсон', value: fmt(t.in_count), delta: { cur: t.in_count, prev: prev.in_count }, ico: 'in', c: 1, accent: true }) : '',
+        wOn('k_out') ? kpi({ label: 'Гарсан', value: fmt(t.out_count), delta: { cur: t.out_count, prev: prev.out_count }, ico: 'out', c: 2 }) : '',
+        wOn('k_pass') ? kpi({ label: 'Өнгөрсөн', value: fmt(t.passby), delta: { cur: t.passby, prev: prev.passby }, ico: 'pass', c: 4 }) : '',
+        wOn('k_back') ? kpi({ label: 'Буцсан', value: fmt(t.turnback), delta: { cur: t.turnback, prev: prev.turnback }, ico: 'back', c: 5 }) : '',
         // Байх хугацаа = дэлгүүрт орсноос гарах хүртэл (REID тайлан эсвэл орох→гарах хос).
         // Төхөөрөмжийн «тоолох бүсэд байсан» хором (хэдхэн сек) нь огт өөр зүйл тул энд
         // харуулахгүй; бодит хугацаа байхгүй үед хайрцгийг нь бүхэлд нь гаргахгүй.
-        t.store_dwell_n ? kpi({ label: 'Байх хугацаа', value: durLong(t.store_dwell_ms), sub: `${fmt(t.store_dwell_n)} зочин · орсноос гарах хүртэл`, ico: 'clock', c: 7 }) : '',
-        kpi({ label: 'Одоо дотор байгаа', value: fmt(ov.occupancy.total), sub: ov.occupancy.devices.some((x) => x.from_snapshot) ? 'төхөөрөмжийн тоолол' : 'орсон − гарсан', ico: 'people', c: 3 }),
+        wOn('k_dwell') && t.store_dwell_n ? kpi({ label: 'Байх хугацаа', value: durLong(t.store_dwell_ms), sub: `${fmt(t.store_dwell_n)} зочин · орсноос гарах хүртэл`, ico: 'clock', c: 7 }) : '',
+        wOn('k_occ') ? kpi({ label: 'Одоо дотор байгаа', value: fmt(ov.occupancy.total), sub: ov.occupancy.devices.some((x) => x.from_snapshot) ? 'төхөөрөмжийн тоолол' : 'орсон − гарсан', ico: 'people', c: 3 }) : '',
       ].join(''));
       // 1 хоног → 30 минутын мөрүүдээс өөрсдөө нэгтгэнэ; бусад үед серверийн нэгтгэсэн
       // цуваа (ov.series) — мөрийн хязгаараас болж тайрагдахгүй.
