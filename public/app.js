@@ -449,10 +449,15 @@
     const fm = {}; flow.by_device.forEach((d) => { fm[d.sn] = d; });
     const canEdit = ['superadmin', 'admin'].includes(state.user.role);
     const unassigned = devs.filter((d) => !d.location_id);
+    // Мөрийн үйлдлүүд. Нэг л сонголт байвал цэс нээх нь илүүц тул шууд товч болгоно.
+    const rowItems = (d) => [
+      { label: 'Дэлгэрэнгүй', run: () => deviceDetailModal(d, fm[d.sn]) },
+      ...(isSuper ? [{ label: 'Устгах', danger: true, run: () => deleteDevice(d.sn) }] : []),
+    ];
     $('#page').innerHTML = `<div class="stack">
       ${unassigned.length ? `<div class="card" style="border-color:var(--warn)"><b>⚠ ${unassigned.length} шинэ төхөөрөмж байршилд оноогдоогүй байна.</b> <span class="muted">Төхөөрөмж сервер рүү өгөгдөл илгээж эхэлмэгц энд автоматаар бүртгэгдэнэ — нэр, байршил оноож өгнө үү.</span></div>` : ''}
-      <div class="card"><div class="tbl-wrap"><table><thead><tr><th>Төлөв</th><th>Нэр / SN</th><th>Байршил</th><th>Сүүлийн heartbeat</th><th>Сүүлийн өгөгдөл</th><th>Холболт</th><th>Firmware</th>${isSuper ? '' : '<th class="num">Орсон</th><th class="num">Гарсан</th>'}<th></th></tr></thead><tbody>
-        ${devs.map((d) => `<tr>
+      <div class="card"><div class="tbl-wrap"><table class="dev-tbl"><thead><tr><th>Төлөв</th><th>Нэр / SN</th><th>Байршил</th><th>Сүүлийн heartbeat</th><th>Сүүлийн өгөгдөл</th><th>Холболт</th><th>Firmware</th>${isSuper ? '' : '<th class="num">Орсон</th><th class="num">Гарсан</th>'}<th></th></tr></thead><tbody>
+        ${devs.map((d) => `<tr data-sn="${esc(d.sn)}" tabindex="0" role="button" aria-label="${esc(d.name || d.sn)} — дэлгэрэнгүй">
           <td><span class="pill ${d.online ? 'on' : d.last_heartbeat ? 'off' : 'na'}"><i class="dot"></i>${d.online ? 'Online' : d.last_heartbeat ? 'Offline' : 'Мэдээгүй'}</span></td>
           <td><b>${esc(d.name || '(нэргүй)')}</b><br><span class="mono muted">${esc(d.sn)}</span></td>
           <td>${d.location_name ? esc(d.location_name) + '<br><span class="small muted">' + esc(d.tenant_name || '') + '</span>' : '<span class="pill warn">Оноогоогүй</span>'}</td>
@@ -460,7 +465,9 @@
           <td class="small">${esc(d.connection_type || '—')} · ${esc(d.ip_address || '—')}<br><span class="muted mono">${esc(d.mac_address || '')}</span></td>
           <td class="small">${esc(d.sw_release || '—')}<br><span class="muted">${esc(d.hw_platform || '')} · ${d.upload_interval === 0 ? 'бодит цаг' : d.upload_interval + ' мин'} · ${d.data_mode}</span>${d.clock_skew_sec ? `<br><span class="pill warn" title="Төхөөрөмжийн цаг серверээс ${Math.round(d.clock_skew_sec / 60)} минут зөрүүтэй илгээж байна — сервер автоматаар засаж хадгална">цаг ${(d.clock_skew_sec / 3600).toFixed(d.clock_skew_sec % 3600 ? 1 : 0)}ц зөрүү · засаж байна</span>` : ''}</td>
           ${isSuper ? '' : `<td class="num">${fmt(fm[d.sn] ? fm[d.sn].in_count : 0)}</td><td class="num">${fmt(fm[d.sn] ? fm[d.sn].out_count : 0)}</td>`}
-          <td><div class="row-actions"><button class="btn sm ghost icon" data-menu="${esc(d.sn)}" title="Үйлдэл" aria-label="Үйлдэл">⋮</button></div></td></tr>`).join('') || `<tr><td colspan="10"><div class="empty-state"><div class="ico">${icon('device')}</div><b>Төхөөрөмж хараахан холбогдоогүй</b><p>Төхөөрөмжийн Data Push тохиргоонд доорх серверийн хаягийг оруулмагц эхний heartbeat-ээр энд автоматаар гарч ирнэ.</p></div></td></tr>`}
+          <td><div class="row-actions">${rowItems(d).length > 1
+            ? `<button class="btn sm ghost icon" data-menu="${esc(d.sn)}" title="Үйлдэл" aria-label="Үйлдэл" aria-haspopup="menu" aria-expanded="false">⋮</button>`
+            : `<button class="btn sm ghost" data-menu="${esc(d.sn)}">${esc(rowItems(d)[0].label)}</button>`}</div></td></tr>`).join('') || `<tr><td colspan="10"><div class="empty-state"><div class="ico">${icon('device')}</div><b>Төхөөрөмж хараахан холбогдоогүй</b><p>Төхөөрөмжийн Data Push тохиргоонд доорх серверийн хаягийг оруулмагц эхний heartbeat-ээр энд автоматаар гарч ирнэ.</p></div></td></tr>`}
       </tbody></table></div></div>
       <div class="card"><div class="head"><h2>Шинэ төхөөрөмж холбох</h2>${canEdit ? '<button class="btn primary" id="claimBtn">+ SN-ээр нэмэх</button>' : ''}</div>
         <details ${devs.length ? '' : 'open'}><summary>Төхөөрөмжийн тохиргооны заавар (Data Push)</summary>
@@ -476,17 +483,28 @@ Interface (анхдагч зөв бол хөндөхгүй):
   REID:          /api/camera/reid
   DUP:           /api/camera/dup</div></details></div></div>`;
     // Мөрийн үйлдэл: ⋮ цэсэнд зөвхөн Дэлгэрэнгүй, Устгах хоёр — бусад нь Дэлгэрэнгүй дотор
+    $('#page').onkeydown = (e) => {
+      const row = e.target.closest('tr[data-sn]');
+      if (row && e.target === row && (e.key === 'Enter' || e.key === ' ')) {
+        e.preventDefault();
+        const d = devs.find((x) => x.sn === row.dataset.sn);
+        if (d) deviceDetailModal(d, fm[d.sn]);
+      }
+    };
     $('#page').onclick = async (e) => {
       const mb = e.target.closest('[data-menu]');
       if (mb) {
         e.stopPropagation();
-        const d = devs.find((x) => x.sn === mb.dataset.menu);
-        return rowMenu(mb, [
-          { label: 'Дэлгэрэнгүй', run: () => deviceDetailModal(d, fm[d.sn]) },
-          ...(isSuper ? [{ label: 'Устгах', danger: true, run: () => deleteDevice(d.sn) }] : []),
-        ]);
+        const items = rowItems(devs.find((x) => x.sn === mb.dataset.menu));
+        return items.length > 1 ? rowMenu(mb, items) : items[0].run();
       }
-      if (e.target.id === 'claimBtn') claimModal();
+      if (e.target.id === 'claimBtn') return claimModal();
+      // Утсан дээр үйлдлийн багана хол байдаг тул мөрийн хаана ч дарж дэлгэрэнгүйг нээнэ
+      const row = e.target.closest('tr[data-sn]');
+      if (row && !e.target.closest('a,button,input,select') && !getSelection().toString()) {
+        const d = devs.find((x) => x.sn === row.dataset.sn);
+        if (d) deviceDetailModal(d, fm[d.sn]);
+      }
     };
   }
   // superadmin: SN-ийг байгууллагад хуваарилна (байршил сонголтот); admin: өөрт хуваарилагдсан SN-ийг байршилд нь тавина
@@ -523,21 +541,41 @@ Interface (анхдагч зөв бол хөндөхгүй):
   }
 
   // Мөрийн ⋮ цэс. Гадуур дарах/ESC-д хаагдана — listener-ийг нэг удаа бүртгэнэ.
-  const closeRowMenu = () => document.querySelectorAll('.rmenu').forEach((x) => x.remove());
+  let rowMenuTrigger = null;
+  const closeRowMenu = (refocus) => {
+    if (!document.querySelector('.rmenu')) return;
+    document.querySelectorAll('.rmenu').forEach((x) => x.remove());
+    document.querySelectorAll('[data-menu][aria-expanded="true"]').forEach((b) => b.setAttribute('aria-expanded', 'false'));
+    if (refocus && rowMenuTrigger && rowMenuTrigger.isConnected) rowMenuTrigger.focus();
+    rowMenuTrigger = null;
+  };
   document.addEventListener('click', (e) => { if (!e.target.closest('.rmenu')) closeRowMenu(); });
-  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeRowMenu(); });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeRowMenu(true); });
   function rowMenu(btn, items) {
     const id = btn.dataset.menu, was = document.querySelector('.rmenu');
     closeRowMenu();
     if (was && was.dataset.for === id) return;   // ижил товч дахин дарвал хаана
     const el = document.createElement('div');
-    el.className = 'rmenu'; el.dataset.for = id;
-    el.innerHTML = items.map((it, i) => `<button type="button" data-i="${i}"${it.danger ? ' class="danger"' : ''}>${esc(it.label)}</button>`).join('');
+    el.className = 'rmenu'; el.dataset.for = id; el.setAttribute('role', 'menu');
+    el.innerHTML = items.map((it, i) => `<button type="button" role="menuitem" data-i="${i}"${it.danger ? ' class="danger"' : ''}>${esc(it.label)}</button>`).join('');
     document.body.appendChild(el);
     const r = btn.getBoundingClientRect();
     el.style.top = Math.max(10, Math.min(r.bottom + 6, innerHeight - el.offsetHeight - 10)) + 'px';
     el.style.left = Math.max(10, Math.min(r.right - el.offsetWidth, innerWidth - el.offsetWidth - 10)) + 'px';
     el.onclick = (ev) => { const b = ev.target.closest('[data-i]'); if (!b) return; closeRowMenu(); items[+b.dataset.i].run(); };
+    // Гарнаас: сум дээш/доош, Esc буцаана, Tab хаана — фокус товч руугаа эргэж очно
+    rowMenuTrigger = btn;
+    btn.setAttribute('aria-expanded', 'true');
+    const opts = [...el.querySelectorAll('button')];
+    opts[0].focus();
+    el.onkeydown = (ev) => {
+      const i = opts.indexOf(document.activeElement);
+      if (ev.key === 'ArrowDown') { ev.preventDefault(); opts[(i + 1) % opts.length].focus(); }
+      else if (ev.key === 'ArrowUp') { ev.preventDefault(); opts[(i - 1 + opts.length) % opts.length].focus(); }
+      else if (ev.key === 'Home') { ev.preventDefault(); opts[0].focus(); }
+      else if (ev.key === 'End') { ev.preventDefault(); opts[opts.length - 1].focus(); }
+      else if (ev.key === 'Tab') { ev.preventDefault(); closeRowMenu(true); }
+    };
   }
 
   // Төхөөрөмжийн дэлгэрэнгүй: бүх мэдээлэл + доод талд нь төхөөрөмжийн өөрийн web UI-г шигтгэж харуулна

@@ -304,6 +304,15 @@ tbody tr.live-row .pill { padding: 1px 7px; font-size: 10.5px; }
 /* Төхөөрөмжийн дэлгэрэнгүй + шигтгэсэн web UI */
 .modal.wide { width: min(1080px, 100%); }
 .modal.fs { width: min(1600px, 100%); max-height: 96vh; }
+/* Төхөөрөмжийн хүснэгт: мөр бүхэлдээ дарагдана, үйлдлийн багана баруун талд наалдана */
+.dev-tbl tbody tr { cursor: pointer; }
+.dev-tbl tbody tr:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.dev-tbl th:last-child, .dev-tbl td:last-child { position: sticky; right: 0; background: var(--surface); }
+.dev-tbl tbody tr:hover td:last-child { background: var(--surface-2); }
+@media (max-width: 1100px) {
+  /* Нарийн дэлгэцэд хэвтээ гүйлгэх үед үйлдэл нүднээс гарахгүй байх тусгаарлагч сүүдэр */
+  .dev-tbl th:last-child, .dev-tbl td:last-child { box-shadow: -10px 0 12px -10px rgba(15, 23, 42, .3); }
+}
 /* Мөрийн ⋮ цэс */
 .rmenu { position: fixed; z-index: 60; min-width: 168px; padding: 6px; display: grid; gap: 2px;
   background: var(--surface); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow-3); }
