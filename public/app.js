@@ -547,6 +547,17 @@ Interface (анхдагч зөв бол хөндөхгүй):
           <a class="btn sm ghost" id="wNew" href="#" target="_blank" rel="noopener" title="Шинэ цонхонд нээх">↗</a></div>
         <form class="webui-bar" id="wF"><input type="text" id="wUrl" class="mono" spellcheck="false" autocomplete="off" aria-label="Төхөөрөмжийн хаяг" placeholder="http://192.168.1.50:8080/main.html" value="${esc(url0)}"><button type="submit" class="btn sm">Нээх</button></form>
         <div class="webui-frame" id="wFrame"></div>
+        <div class="webui-hint" id="wHint" hidden>
+          <b>Хоосон харагдаж байна уу? Браузер HTTP агуулгыг хориглосон байна.</b>
+          <p>Энэ самбар HTTPS-ээр, төхөөрөмж HTTP-ээр ажилладаг тул Chrome анхдагчаар хориглодог. Компьютер бүрт нэг удаа зөвшөөрөхөд энд шигтгэгдэж ачаалагдана:</p>
+          <ol>
+            <li>Хаягийн мөрөнд байгаа <b>🔒 түгжээ</b> дээр дарна → <b>Site settings</b></li>
+            <li><b>Insecure content</b> → <b>Allow</b> болгоно</li>
+            <li>Хуудсаа сэргээгээд энэ цонхыг дахин нээнэ</li>
+          </ol>
+          <p class="small">Chrome-ийн шинэ хувилбарууд дотоод сүлжээний хаяг руу хандахыг нэмж хязгаарладаг тул зарим тохиолдолд энэ ч тус болохгүй байж болно — тэр үед шинэ цонхонд нээнэ.</p>
+          <a class="btn primary sm" data-u href="#" target="_blank" rel="noopener">Шинэ цонхонд нээх ↗</a>
+        </div>
         <p class="webui-note">Энэ хуудас төхөөрөмж дотор ажилладаг тул зөвхөн түүнтэй нэг сүлжээнд (дэлгүүрийн WiFi/кабель, VPN) байхад ачаална. Порт/зам өөр бол дээрх хаягийг засаад «Нээх» дарна — сонголт тухайн төхөөрөмжид хадгалагдана.</p>
       </div>`, (bg) => {
       bg.querySelector('.modal').classList.add('wide');
@@ -558,16 +569,23 @@ Interface (анхдагч зөв бол хөндөхгүй):
         if (!u) return msg('<b>IP хаяг мэдэгдэхгүй байна</b><p>Төхөөрөмж эхний heartbeat илгээмэгц IP нь энд гарна. Мэдэж байвал дээр гараар бичиж болно.</p>');
         if (!/^https?:\/\/[^\s]+$/i.test(u)) return msg('<b>Хаяг буруу байна</b><p><span class="mono">http://…</span> хэлбэртэй бичнэ үү.</p>');
         lsSet(webKey(d.sn), u);
-        // HTTPS самбар дотор HTTP frame-ийг браузер бүрмөсөн хориглоно (mixed content) — шинэ цонхоор нээлгэнэ
-        if (location.protocol === 'https:' && u.startsWith('http://')) {
-          return msg(`<b>Энэ самбар HTTPS-ээр ажиллаж байна</b><p>Браузер HTTPS хуудсан дотор HTTP агуулга ачаалахыг хориглодог тул төхөөрөмжийн хуудсыг энд шигтгэж чадахгүй.</p><a class="btn primary sm" href="${esc(u)}" target="_blank" rel="noopener">Шинэ цонхонд нээх ↗</a>`);
-        }
+        // HTTPS хуудсан дотор HTTP frame-ийг браузер анхдагчаар хориглодог (mixed content).
+        // Гэхдээ хэрэглэгч тухайн сайтад «Insecure content → Allow» тохиргоог асаавал ачаалагддаг
+        // тул урьдчилж бууж өгөхгүй — үргэлж оролдоно. Ачаалагдаагүй бол доор нь заавар гарна.
         box.innerHTML = '';
         const fr = document.createElement('iframe');
         fr.setAttribute('referrerpolicy', 'no-referrer');
         fr.setAttribute('sandbox', 'allow-scripts allow-forms allow-same-origin allow-popups allow-modals allow-downloads');
+        const mixed = location.protocol === 'https:' && u.startsWith('http://');
+        const hint = bg.querySelector('#wHint');
+        if (hint) { hint.hidden = true; hint.querySelectorAll('[data-u]').forEach((a) => { a.href = u; }); }
+        let loaded = false;
+        fr.onload = () => { loaded = true; };
         fr.src = u;
         box.appendChild(fr);
+        // Хориглогдсон эсэхийг гаднаас нь уншиж болдоггүй тул хугацаагаар шүүнэ — ачаалагдвал
+        // заавар гарахгүй, ачаалагдаагүй бол frame-ийг устгалгүйгээр доор нь зөвлөмж гаргана.
+        if (mixed && hint) setTimeout(() => { if (!loaded && bg.isConnected) hint.hidden = false; }, 2500);
       }
       bg.querySelector('#wF').onsubmit = (e) => { e.preventDefault(); load(bg.querySelector('#wUrl').value); };
       bg.querySelector('#wExp').onclick = () => bg.querySelector('.modal').classList.toggle('fs');
