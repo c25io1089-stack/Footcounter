@@ -460,7 +460,7 @@
           <td class="small">${esc(d.connection_type || '—')} · ${esc(d.ip_address || '—')}<br><span class="muted mono">${esc(d.mac_address || '')}</span></td>
           <td class="small">${esc(d.sw_release || '—')}<br><span class="muted">${esc(d.hw_platform || '')} · ${d.upload_interval === 0 ? 'бодит цаг' : d.upload_interval + ' мин'} · ${d.data_mode}</span>${d.clock_skew_sec ? `<br><span class="pill warn" title="Төхөөрөмжийн цаг серверээс ${Math.round(d.clock_skew_sec / 60)} минут зөрүүтэй илгээж байна — сервер автоматаар засаж хадгална">цаг ${(d.clock_skew_sec / 3600).toFixed(d.clock_skew_sec % 3600 ? 1 : 0)}ц зөрүү · засаж байна</span>` : ''}</td>
           ${isSuper ? '' : `<td class="num">${fmt(fm[d.sn] ? fm[d.sn].in_count : 0)}</td><td class="num">${fmt(fm[d.sn] ? fm[d.sn].out_count : 0)}</td>`}
-          <td><div class="row-actions">${canEdit ? `<button class="btn sm" data-edit="${d.sn}">Засах</button><button class="btn sm ghost" data-resync="${d.sn}">Дахин татах</button>` : ''}<button class="btn sm ghost" data-hb="${d.sn}">Лог</button><button class="btn sm ghost" data-web="${esc(d.sn)}" title="Бүх мэдээлэл ба төхөөрөмжийн өөрийн web UI">Дэлгэрэнгүй</button>${isSuper ? `<button class="btn sm ghost danger" data-del="${esc(d.sn)}" title="Төхөөрөмж ба түүний бүх өгөгдлийг устгана">Устгах</button>` : ''}</div></td></tr>`).join('') || `<tr><td colspan="10"><div class="empty-state"><div class="ico">${icon('device')}</div><b>Төхөөрөмж хараахан холбогдоогүй</b><p>Төхөөрөмжийн Data Push тохиргоонд доорх серверийн хаягийг оруулмагц эхний heartbeat-ээр энд автоматаар гарч ирнэ.</p></div></td></tr>`}
+          <td><div class="row-actions"><button class="btn sm ghost icon" data-menu="${esc(d.sn)}" title="Үйлдэл" aria-label="Үйлдэл">⋮</button></div></td></tr>`).join('') || `<tr><td colspan="10"><div class="empty-state"><div class="ico">${icon('device')}</div><b>Төхөөрөмж хараахан холбогдоогүй</b><p>Төхөөрөмжийн Data Push тохиргоонд доорх серверийн хаягийг оруулмагц эхний heartbeat-ээр энд автоматаар гарч ирнэ.</p></div></td></tr>`}
       </tbody></table></div></div>
       <div class="card"><div class="head"><h2>Шинэ төхөөрөмж холбох</h2>${canEdit ? '<button class="btn primary" id="claimBtn">+ SN-ээр нэмэх</button>' : ''}</div>
         <details ${devs.length ? '' : 'open'}><summary>Төхөөрөмжийн тохиргооны заавар (Data Push)</summary>
@@ -475,24 +475,18 @@ Interface (анхдагч зөв бол хөндөхгүй):
   Data API:      /api/camera/dataUpload
   REID:          /api/camera/reid
   DUP:           /api/camera/dup</div></details></div></div>`;
+    // Мөрийн үйлдэл: ⋮ цэсэнд зөвхөн Дэлгэрэнгүй, Устгах хоёр — бусад нь Дэлгэрэнгүй дотор
     $('#page').onclick = async (e) => {
-      const ed = e.target.closest('[data-edit]'); const rs = e.target.closest('[data-resync]'); const hb = e.target.closest('[data-hb]');
-      if (ed) deviceModal(devs.find((d) => d.sn === ed.dataset.edit));
-      if (rs) resyncModal(rs.dataset.resync);
-      const web = e.target.closest('[data-web]');
-      if (web) deviceDetailModal(devs.find((d) => d.sn === web.dataset.web), fm[web.dataset.web]);
-      const del = e.target.closest('[data-del]');
-      if (del && await confirmDlg(`${del.dataset.del} төхөөрөмжийг бүх өгөгдөл, heartbeat логтой нь хамт бүрмөсөн устгах уу? Төхөөрөмж дахин heartbeat илгээвэл хуваарилаагүй байдлаар дахин бүртгэгдэнэ.`, { danger: true })) { try { await api('/dash/devices/' + del.dataset.del, { method: 'DELETE' }); toast('Төхөөрөмж устгагдлаа'); await loadMeta(); fillLocationSelects(); render(); } catch (err) { toast(err.message, 'error'); } }
-      if (e.target.id === 'claimBtn') claimModal();
-      if (hb) {
-        const dv = devs.find((x) => x.sn === hb.dataset.hb) || {};
-        const rows = await api('/dash/devices/' + hb.dataset.hb + '/heartbeats');
-        modal(`<h2>Лог — ${esc(dv.name || hb.dataset.hb)}</h2>
-          <h3 style="margin-bottom:6px">Сүүлийн dataUpload (төхөөрөмжөөс ирсэн бодит body)</h3>
-          ${dv.last_upload ? `<div class="code" style="max-height:32vh;overflow:auto;white-space:pre-wrap">${esc(JSON.stringify(dv.last_upload, null, 2))}</div>` : '<p class="muted small">Хараахан өгөгдөл ирээгүй</p>'}
-          <h3 style="margin:14px 0 6px">Heartbeat (сүүлийн 50)</h3>
-          <div class="tbl-wrap" style="max-height:32vh;overflow:auto"><table><thead><tr><th>Цаг</th><th>IP</th><th>Холболт</th><th>Firmware</th></tr></thead><tbody>${rows.map((r) => `<tr><td>${fmtDT(r.ts)}</td><td>${esc(r.payload.ipAddress || '')}</td><td>${esc(r.payload.connectionType || '')}</td><td>${esc(r.payload.swRelease || '')}</td></tr>`).join('') || '<tr><td colspan="4" class="empty">Хоосон</td></tr>'}</tbody></table></div>`);
+      const mb = e.target.closest('[data-menu]');
+      if (mb) {
+        e.stopPropagation();
+        const d = devs.find((x) => x.sn === mb.dataset.menu);
+        return rowMenu(mb, [
+          { label: 'Дэлгэрэнгүй', run: () => deviceDetailModal(d, fm[d.sn]) },
+          ...(isSuper ? [{ label: 'Устгах', danger: true, run: () => deleteDevice(d.sn) }] : []),
+        ]);
       }
+      if (e.target.id === 'claimBtn') claimModal();
     };
   }
   // superadmin: SN-ийг байгууллагад хуваарилна (байршил сонголтот); admin: өөрт хуваарилагдсан SN-ийг байршилд нь тавина
@@ -513,6 +507,39 @@ Interface (анхдагч зөв бол хөндөхгүй):
       bg.querySelector('#f').onsubmit = async (e) => { e.preventDefault(); try { const d = await api('/dash/devices/claim', { method: 'POST', body: Object.fromEntries(new FormData(e.target)) }); toast(isSuper ? `${d.sn} хуваарилагдлаа` : 'Төхөөрөмж нэмэгдлээ'); close(); await loadMeta(); fillLocationSelects(); render(); } catch (err) { toast(err.message, 'error'); } };
     });
   }
+  async function deleteDevice(sn) {
+    if (!await confirmDlg(`${sn} төхөөрөмжийг бүх өгөгдөл, heartbeat логтой нь хамт бүрмөсөн устгах уу? Төхөөрөмж дахин heartbeat илгээвэл хуваарилаагүй байдлаар дахин бүртгэгдэнэ.`, { danger: true })) return;
+    try { await api('/dash/devices/' + sn, { method: 'DELETE' }); toast('Төхөөрөмж устгагдлаа'); await loadMeta(); fillLocationSelects(); render(); }
+    catch (err) { toast(err.message, 'error'); }
+  }
+
+  async function heartbeatModal(d) {
+    const rows = await api('/dash/devices/' + d.sn + '/heartbeats');
+    modal(`<h2>Лог — ${esc(d.name || d.sn)}</h2>
+      <h3 style="margin-bottom:6px">Сүүлийн dataUpload (төхөөрөмжөөс ирсэн бодит body)</h3>
+      ${d.last_upload ? `<div class="code" style="max-height:32vh;overflow:auto;white-space:pre-wrap">${esc(JSON.stringify(d.last_upload, null, 2))}</div>` : '<p class="muted small">Хараахан өгөгдөл ирээгүй</p>'}
+      <h3 style="margin:14px 0 6px">Heartbeat (сүүлийн 50)</h3>
+      <div class="tbl-wrap" style="max-height:32vh;overflow:auto"><table><thead><tr><th>Цаг</th><th>IP</th><th>Холболт</th><th>Firmware</th></tr></thead><tbody>${rows.map((r) => `<tr><td>${fmtDT(r.ts)}</td><td>${esc(r.payload.ipAddress || '')}</td><td>${esc(r.payload.connectionType || '')}</td><td>${esc(r.payload.swRelease || '')}</td></tr>`).join('') || '<tr><td colspan="4" class="empty">Хоосон</td></tr>'}</tbody></table></div>`);
+  }
+
+  // Мөрийн ⋮ цэс. Гадуур дарах/ESC-д хаагдана — listener-ийг нэг удаа бүртгэнэ.
+  const closeRowMenu = () => document.querySelectorAll('.rmenu').forEach((x) => x.remove());
+  document.addEventListener('click', (e) => { if (!e.target.closest('.rmenu')) closeRowMenu(); });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeRowMenu(); });
+  function rowMenu(btn, items) {
+    const id = btn.dataset.menu, was = document.querySelector('.rmenu');
+    closeRowMenu();
+    if (was && was.dataset.for === id) return;   // ижил товч дахин дарвал хаана
+    const el = document.createElement('div');
+    el.className = 'rmenu'; el.dataset.for = id;
+    el.innerHTML = items.map((it, i) => `<button type="button" data-i="${i}"${it.danger ? ' class="danger"' : ''}>${esc(it.label)}</button>`).join('');
+    document.body.appendChild(el);
+    const r = btn.getBoundingClientRect();
+    el.style.top = Math.max(10, Math.min(r.bottom + 6, innerHeight - el.offsetHeight - 10)) + 'px';
+    el.style.left = Math.max(10, Math.min(r.right - el.offsetWidth, innerWidth - el.offsetWidth - 10)) + 'px';
+    el.onclick = (ev) => { const b = ev.target.closest('[data-i]'); if (!b) return; closeRowMenu(); items[+b.dataset.i].run(); };
+  }
+
   // Төхөөрөмжийн дэлгэрэнгүй: бүх мэдээлэл + доод талд нь төхөөрөмжийн өөрийн web UI-г шигтгэж харуулна
   // (шинэ цонх руу шилжихгүй). Зөвхөн төхөөрөмжтэй нэг сүлжээнд байхад ачаална.
   const webKey = (sn) => 'devweb:' + sn;
@@ -524,6 +551,7 @@ Interface (анхдагч зөв бол хөндөхгүй):
     const url0 = lsGet(webKey(d.sn)) || (d.ip_address ? 'http://' + d.ip_address : '');
     modal(`<h2>${esc(d.name || '(нэргүй)')}</h2>
       <div class="det-top"><span class="pill ${d.online ? 'on' : d.last_heartbeat ? 'off' : 'na'}"><i class="dot"></i>${d.online ? 'Online' : d.last_heartbeat ? 'Offline' : 'Мэдээгүй'}</span><span class="mono muted">${esc(d.sn)}</span></div>
+      <div class="det-actions" id="dAct">${['superadmin', 'admin'].includes(state.user.role) ? '<button type="button" class="btn sm" data-act="edit">Засах</button><button type="button" class="btn sm ghost" data-act="resync">Дахин татах</button>' : ''}<button type="button" class="btn sm ghost" data-act="log">Лог</button></div>
       <div class="kv">
         ${kv('Байршил', d.location_name ? esc(d.location_name) : '<span class="pill warn">Оноогоогүй</span>')}
         ${kv('Байгууллага', esc(d.tenant_name || ''))}
@@ -559,8 +587,15 @@ Interface (анхдагч зөв бол хөндөхгүй):
           <a class="btn primary sm" data-u href="#" target="_blank" rel="noopener">Шинэ цонхонд нээх ↗</a>
         </div>
         <p class="webui-note">Энэ хуудас төхөөрөмж дотор ажилладаг тул зөвхөн түүнтэй нэг сүлжээнд (дэлгүүрийн WiFi/кабель, VPN) байхад ачаална. Порт/зам өөр бол дээрх хаягийг засаад «Нээх» дарна — сонголт тухайн төхөөрөмжид хадгалагдана.</p>
-      </div>`, (bg) => {
+      </div>`, (bg, close) => {
       bg.querySelector('.modal').classList.add('wide');
+      bg.querySelector('#dAct').onclick = (e) => {
+        const a = e.target.closest('[data-act]'); if (!a) return;
+        close();
+        if (a.dataset.act === 'edit') deviceModal(d);
+        else if (a.dataset.act === 'resync') resyncModal(d.sn);
+        else heartbeatModal(d);
+      };
       const box = bg.querySelector('#wFrame'), link = bg.querySelector('#wNew');
       const msg = (h) => { box.innerHTML = `<div class="webui-msg">${h}</div>`; };
       function load(u) {

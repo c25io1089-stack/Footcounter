@@ -304,6 +304,15 @@ tbody tr.live-row .pill { padding: 1px 7px; font-size: 10.5px; }
 /* Төхөөрөмжийн дэлгэрэнгүй + шигтгэсэн web UI */
 .modal.wide { width: min(1080px, 100%); }
 .modal.fs { width: min(1600px, 100%); max-height: 96vh; }
+/* Мөрийн ⋮ цэс */
+.rmenu { position: fixed; z-index: 60; min-width: 168px; padding: 6px; display: grid; gap: 2px;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow-3); }
+.rmenu button { display: block; width: 100%; padding: 8px 11px; border: 0; border-radius: 8px; background: transparent;
+  color: var(--text); font: inherit; font-size: 13px; text-align: left; cursor: pointer; }
+.rmenu button:hover { background: var(--surface-2); }
+.rmenu button.danger { color: var(--bad); } .rmenu button.danger:hover { background: var(--bad-soft); }
+/* Дэлгэрэнгүй цонхны үйлдлүүд */
+.det-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 18px; }
 .det-top { display: flex; align-items: center; gap: 10px; margin: -8px 0 16px; flex-wrap: wrap; }
 .kv { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px 20px; margin-bottom: 18px; }
 .kv .k { display: block; font-size: 11px; font-weight: 700; letter-spacing: .03em; text-transform: uppercase; color: var(--muted); }
