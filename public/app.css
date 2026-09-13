@@ -34,6 +34,22 @@
     --shadow-1: none; --shadow-2: 0 0 0 1px rgba(255,255,255,.02); --shadow-3: 0 24px 64px -12px rgba(0,0,0,.7);
   }
 }
+/* Гар тохиргоогоор сонгосон харанхуй — дээрх автомат блоктой ижил утгууд.
+   Хоёрыг ЗЭРЭГ шинэчилнэ (нэгийг нь мартвал гар тохиргоо хоцордог). */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #0c0f14; --surface: #12161d; --surface-2: #1a1f28; --surface-3: #232a35; --border: #222833; --border-strong: #303846;
+  --text: #f1f5f9; --text-2: #b6c0cf; --muted: #8d97a8;
+  --accent: #5b9dff; --accent-hover: #7bb0ff; --accent-soft: #172746; --accent-ring: rgba(91,157,255,.35);
+  --s1: #5b9dff; --s2: #fb8f47; --s3: #2dd4a0; --s4: #fbbf24; --s5: #f472b6; --s6: #4ade80; --s7: #a78bfa; --s8: #f87171;
+  /* Харанхуй горимд тусад нь сонгосон шат — автомат урвуулалт биш */
+  --c1: #3987e5; --c2: #d95926; --c3: #199e70; --c4: #d55181; --c-ctx: #8d97a8;
+  --o1: #cde2fb; --o2: #9ec5f4; --o3: #5598e7; --o4: #2a78d6; --o5: #184f95;
+  --h1: #fed7aa; --h2: #fb923c; --h3: #ea580c; --h4: #b8460e;
+  --good: #5ed394; --good-soft: #10281c; --bad: #fca5a5; --bad-soft: #3a1a1a; --warn: #fbbf24; --warn-soft: #3a2a10; --info-soft: #172746;
+  --side-bg: #12161d; --side-accent: #7bb0ff; --side-strong: #f1f5f9; --side-text: #b6c0cf; --side-muted: #8d97a8; --side-border: #222833; --side-active: #172746; --side-hover: #1a1f28;
+  --shadow-1: none; --shadow-2: 0 0 0 1px rgba(255,255,255,.02); --shadow-3: 0 24px 64px -12px rgba(0,0,0,.7);
+}
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
 html, body { margin: 0; height: 100%; }
@@ -277,6 +293,7 @@ tbody tr.live-row .pill { padding: 1px 7px; font-size: 10.5px; }
 .skeleton { position: relative; overflow: hidden; background: var(--surface-2); border-radius: 10px; }
 .skeleton::after { content: ""; position: absolute; inset: 0; transform: translateX(-100%); background: linear-gradient(90deg, transparent, rgba(255,255,255,.4), transparent); animation: shimmer 1.4s infinite; }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .skeleton::after { background: linear-gradient(90deg, transparent, rgba(255,255,255,.05), transparent); } }
+:root[data-theme="dark"] .skeleton::after { background: linear-gradient(90deg, transparent, rgba(255,255,255,.05), transparent); }
 @keyframes shimmer { to { transform: translateX(100%); } }
 .sk-kpi { height: 118px; border-radius: var(--radius); } .sk-block { height: 320px; border-radius: var(--radius); }
 
@@ -312,6 +329,12 @@ tbody tr.live-row .pill { padding: 1px 7px; font-size: 10.5px; }
   /* Нарийн дэлгэцэд хэвтээ гүйлгэх үед үйлдэл нүднээс гарахгүй байх тусгаарлагч сүүдэр */
   .dev-tbl th:last-child, .dev-tbl td:last-child { box-shadow: -10px 0 12px -10px rgba(15, 23, 42, .3); }
 }
+.theme-btn { display: grid; place-items: center; width: 38px; height: 38px; padding: 0; border-radius: 10px; border: 1px solid var(--border); background: var(--surface); color: var(--text-2); cursor: pointer; transition: background .15s, color .15s; }
+.theme-btn:hover { background: var(--surface-2); color: var(--text); }
+.theme-btn svg { width: 18px; height: 18px; }
+.topbar .title { min-width: 0; }
+.topbar .tools { display: flex; align-items: center; gap: 10px; margin-left: auto; }
+
 /* Самбарын үзүүлэлт сонгох цонх */
 .wpop { position: fixed; z-index: 60; width: 280px; padding: 14px 16px 12px; background: var(--surface);
   border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow-3); }

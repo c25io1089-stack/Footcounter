@@ -309,9 +309,12 @@
       </aside>
       <main class="main">
         <div class="topbar"><div class="title"><h1 id="pageTitle"></h1><p class="page-sub" id="pageSub"></p></div>
+          <div class="tools">
+          <button type="button" class="theme-btn" id="themeBtn"></button>
           <div class="umenu"><button class="avatar" id="umBtn" aria-label="Хэрэглэгчийн цэс">${esc(initials(state.user.name || state.user.email))}</button>
             <div class="pop" id="umPop" hidden><div class="who"><b>${esc(state.user.name || state.user.email)}</b>${esc(state.user.email)} · ${roleName(state.user.role)}</div>
               <button type="button" id="umPw">Нууц үг солих</button><button type="button" class="danger" id="umOut">Гарах</button></div></div>
+          </div>
         </div>
         <div class="toolbar" id="globalFilters">
           ${isSuper ? `<select id="fTenant" aria-label="Байгууллага"><option value="">Бүх байгууллага</option>${state.tenants.map((t) => `<option value="${t.id}" ${String(t.id) === String(state.tenantId) ? 'selected' : ''}>${esc(t.name)}</option>`).join('')}</select>` : ''}
@@ -339,6 +342,15 @@
     $('#fRange').onclick = (e) => { const b = e.target.closest('button'); if (!b) return; state.range = b.dataset.r; [...$('#fRange').children].forEach((x) => x.classList.toggle('active', x === b)); $('#customRange').hidden = state.range !== 'custom'; if (state.range !== 'custom') render(); };
     $('#fFrom').onchange = $('#fTo').onchange = () => { state.from = $('#fFrom').value; state.to = $('#fTo').value; if (state.from && state.to) render(); };
     $('#refreshBtn').onclick = () => render();
+    themeApply(themeGet());
+    // Систем → Гэрэл → Харанхуй → Систем. Өнгө нь CSS хувьсагчаар тул график, хүснэгтийг
+    // дахин зурахад л шинэ өнгөө авна.
+    $('#themeBtn').onclick = () => {
+      const next = THEMES[(THEMES.indexOf(themeGet()) + 1) % THEMES.length];
+      try { localStorage.setItem('footfall.theme', next); } catch { /* private mode */ }
+      // Chart.defaults нь эхлэхэд нэг удаа уншигддаг тул дахин тавина (тэнхлэг, тайлбарын өнгө)
+      themeApply(next); chartDefaults(); render();
+    };
     $('#fsBtn').onclick = toggleFs;
     $('#wBtn').onclick = (e) => { e.stopPropagation(); widgetPanel(e.currentTarget); };
     window.onhashchange = () => render();
@@ -545,7 +557,7 @@ Interface (анхдагч зөв бол хөндөхгүй):
   // Самбарт ямар үзүүлэлт харагдахыг хэрэглэгч өөрөө сонгоно. Сонголт нь браузерт
   // хадгалагдана (хэрэглэгч бүрт өөрийн, серверт нөлөөлөхгүй).
   const DB_W = [
-    ['Гол үзүүлэлт', [['k_in', 'Орсон'], ['k_out', 'Гарсан'], ['k_pass', 'Өнгөрсөн'], ['k_back', 'Буцсан'], ['k_dwell', 'Байх хугацаа'], ['k_occ', 'Одоо дотор байгаа']]],
+    ['Гол үзүүлэлт', [['k_in', 'Орсон'], ['k_out', 'Гарсан'], ['k_pass', 'Өнгөрсөн'], ['k_back', 'Буцсан'], ['k_occ', 'Одоо дотор байгаа']]],
     ['Картууд', [['c_flow', 'Урсгалын график'], ['c_prof', 'Зочны бүтэц'], ['c_heat', 'Өдөр × цагийн нягтрал']]],
     ['Зочны бүтцийн багана', [['p_gender', 'Хүйс'], ['p_ac', 'Насанд хүрэгч / Хүүхэд'], ['p_age', 'Насны бүлэг'], ['p_h', 'Өндөр']]],
   ];
@@ -936,6 +948,23 @@ POST ${O}/api/camera/dup          — өдрийн DUP (realtime + final) тай
   const bDate = (b) => { const s = bKey(b); return `${s.slice(8, 10)}.${s.slice(5, 7)}.${s.slice(0, 4)}`; };
   // «14:30–15:00» — 30 минутын үеийн шошго
   const bTime = (b) => { const s = bKey(b).slice(11, 16), e = new Date(2000, 0, 1, +s.slice(0, 2), +s.slice(3, 5) + 30); return `${s}–${String(e.getHours()).padStart(2, '0')}:${String(e.getMinutes()).padStart(2, '0')}`; };
+  // ---- Загварын горим: систем / гэрэл / харанхуй ----
+  const THEMES = ['auto', 'light', 'dark'];
+  const THEME_LABEL = { auto: 'Систем', light: 'Гэрэл', dark: 'Харанхуй' };
+  const THEME_ICO = {
+    auto: '<path d="M3 5h18v11H3zM8 20h8M12 16v4"/>',
+    light: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M19.1 4.9l-1.4 1.4M6.3 17.7l-1.4 1.4"/>',
+    dark: '<path d="M20 13.4A8 8 0 1 1 10.6 4a6.5 6.5 0 0 0 9.4 9.4z"/>',
+  };
+  const themeGet = () => { try { return THEMES.includes(localStorage.getItem('footfall.theme')) ? localStorage.getItem('footfall.theme') : 'auto'; } catch { return 'auto'; } };
+  function themeApply(t) {
+    if (t === 'auto') delete document.documentElement.dataset.theme;
+    else document.documentElement.dataset.theme = t;
+    const b = $('#themeBtn');
+    if (b) { b.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${THEME_ICO[t]}</svg>`; b.title = `Загвар: ${THEME_LABEL[t]} — солихын тулд дарна`; b.setAttribute('aria-label', b.title); }
+  }
+  themeApply(themeGet());   // нэвтрэхээс өмнө ч үйлчилнэ
+
   // ---- CSV: Excel-д зөв нээгдэхийн тулд BOM + таслалаас ангид утга ----
   const csvCell = (v) => { if (v == null) return ''; const t = String(v); return /[",;\n]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t; };
   const csvRow = (arr) => arr.map(csvCell).join(',');
@@ -1375,10 +1404,6 @@ POST ${O}/api/camera/dup          — өдрийн DUP (realtime + final) тай
         wOn('k_out') ? kpi({ label: 'Гарсан', value: fmt(t.out_count), delta: { cur: t.out_count, prev: prev.out_count }, ico: 'out', c: 2 }) : '',
         wOn('k_pass') ? kpi({ label: 'Өнгөрсөн', value: fmt(t.passby), delta: { cur: t.passby, prev: prev.passby }, ico: 'pass', c: 4 }) : '',
         wOn('k_back') ? kpi({ label: 'Буцсан', value: fmt(t.turnback), delta: { cur: t.turnback, prev: prev.turnback }, ico: 'back', c: 5 }) : '',
-        // Байх хугацаа = дэлгүүрт орсноос гарах хүртэл (REID тайлан эсвэл орох→гарах хос).
-        // Төхөөрөмжийн «тоолох бүсэд байсан» хором (хэдхэн сек) нь огт өөр зүйл тул энд
-        // харуулахгүй; бодит хугацаа байхгүй үед хайрцгийг нь бүхэлд нь гаргахгүй.
-        wOn('k_dwell') && t.store_dwell_n ? kpi({ label: 'Байх хугацаа', value: durLong(t.store_dwell_ms), sub: `${fmt(t.store_dwell_n)} зочин · орсноос гарах хүртэл`, ico: 'clock', c: 7 }) : '',
         wOn('k_occ') ? kpi({ label: 'Одоо дотор байгаа', value: fmt(ov.occupancy.total), sub: ov.occupancy.devices.some((x) => x.from_snapshot) ? 'төхөөрөмжийн тоолол' : 'орсон − гарсан', ico: 'people', c: 3 }) : '',
       ].join(''));
       // 1 хоног → 30 минутын мөрүүдээс өөрсдөө нэгтгэнэ; бусад үед серверийн нэгтгэсэн
