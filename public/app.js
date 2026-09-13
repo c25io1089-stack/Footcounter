@@ -321,6 +321,7 @@
           <span id="customRange" class="filters" ${state.range === 'custom' ? '' : 'hidden'}><input type="date" id="fFrom" value="${state.from}"> – <input type="date" id="fTo" value="${state.to}"></span>
           <div class="grow"></div>
           <span id="lastUpd" class="muted small"></span>
+          <button class="btn" id="expBtn" title="Сонгосон хугацааны бүх тоон үзүүлэлтийг CSV болгож татах"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0-4-4m4 4 4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg> Татах</button>
           <button class="btn" id="wBtn" title="Самбарт харуулах үзүүлэлтээ сонгох"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M4 12h16M4 18h16"/><circle cx="9" cy="6" r="2" fill="currentColor"/><circle cx="15" cy="12" r="2" fill="currentColor"/><circle cx="8" cy="18" r="2" fill="currentColor"/></svg> Үзүүлэлт</button>
           <button class="btn icon" id="fsBtn" title="Бүтэн дэлгэц — TV/монитор дээр тавихад (гарахдаа Esc)" aria-label="Бүтэн дэлгэц">⛶</button>
           <button class="btn" id="refreshBtn" aria-label="Өгөгдөл шинэчлэх"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.6-6.4M21 3v6h-6"/></svg> Шинэчлэх</button>
@@ -341,6 +342,7 @@
     $('#refreshBtn').onclick = () => render();
     $('#fsBtn').onclick = toggleFs;
     $('#wBtn').onclick = (e) => { e.stopPropagation(); widgetPanel(e.currentTarget); };
+    $('#expBtn').onclick = () => (state.dbExport ? state.dbExport() : toast('Өгөгдөл ачаалж дуустал хүлээнэ үү', 'info'));
     window.onhashchange = () => render();
   }
   const roleName = (r) => ({ superadmin: 'Супер админ', admin: 'Админ', viewer: 'Үзэгч' }[r] || r);
@@ -540,6 +542,20 @@ Interface (анхдагч зөв бол хөндөхгүй):
       ${d.last_upload ? `<div class="code" style="max-height:32vh;overflow:auto;white-space:pre-wrap">${esc(JSON.stringify(d.last_upload, null, 2))}</div>` : '<p class="muted small">Хараахан өгөгдөл ирээгүй</p>'}
       <h3 style="margin:14px 0 6px">Heartbeat (сүүлийн 50)</h3>
       <div class="tbl-wrap" style="max-height:32vh;overflow:auto"><table><thead><tr><th>Цаг</th><th>IP</th><th>Холболт</th><th>Firmware</th></tr></thead><tbody>${rows.map((r) => `<tr><td>${fmtDT(r.ts)}</td><td>${esc(r.payload.ipAddress || '')}</td><td>${esc(r.payload.connectionType || '')}</td><td>${esc(r.payload.swRelease || '')}</td></tr>`).join('') || '<tr><td colspan="4" class="empty">Хоосон</td></tr>'}</tbody></table></div>`);
+  }
+
+  // ---- CSV: Excel-д зөв нээгдэхийн тулд BOM + таслалаас ангид утга ----
+  const csvCell = (v) => {
+    if (v == null) return '';
+    const t = String(v);
+    return /[",;\n]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t;
+  };
+  const csvRow = (arr) => arr.map(csvCell).join(',');
+  function downloadCsv(name, lines) {
+    const blob = new Blob(['\ufeff' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob); a.download = name; a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
   }
 
   // Самбарт ямар үзүүлэлт харагдахыг хэрэглэгч өөрөө сонгоно. Сонголт нь браузерт
@@ -934,6 +950,8 @@ POST ${O}/api/camera/dup          — өдрийн DUP (realtime + final) тай
   const curBucketKey = () => { const k = tzKey(new Date()); return k.slice(0, 14) + (+k.slice(14, 16) < 30 ? '00' : '30'); };
   const bKey = (b) => String(b).replace(' ', 'T').slice(0, 16);
   const bDate = (b) => { const s = bKey(b); return `${s.slice(8, 10)}.${s.slice(5, 7)}.${s.slice(0, 4)}`; };
+  // «14:30–15:00» — 30 минутын үеийн шошго (AG Grid руу шилжих үед устсаныг сэргээв)
+  const bTime = (b) => { const s = bKey(b).slice(11, 16), e = new Date(2000, 0, 1, +s.slice(0, 2), +s.slice(3, 5) + 30); return `${s}–${String(e.getHours()).padStart(2, '0')}:${String(e.getMinutes()).padStart(2, '0')}`; };
   const clockText = () => new Date().toLocaleTimeString('mn-MN', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
   // [талбарын нэр, шошго] — эрэмбэтэй; сүүлийнх нь «тодорхойгүй» тул шатлалд ордоггүй, саарал
   const A_BANDS = [['0_16', '0–16'], ['17_30', '17–30'], ['31_45', '31–45'], ['46_60', '46–60'], ['61p', '61+'], ['unknown', 'Тодорхойгүй']];
@@ -1258,6 +1276,7 @@ POST ${O}/api/camera/dup          — өдрийн DUP (realtime + final) тай
         </div></div>` : ''}
       ${wOn('c_heat') ? `<div class="card section"><div class="head"><h2>Долоо хоногийн өдөр × цаг</h2><span class="sub">орсон хүний нягтрал</span></div><div id="heat"></div></div>` : ''}`;
     let prev = null, heatDone = false;
+    const snap = { ov: null, rows: null, heat: null };
     async function tick() {
       if (document.hidden || state.page !== 'dashboard') return;
       const { days } = rangeDates();
@@ -1272,9 +1291,10 @@ POST ${O}/api/camera/dup          — өдрийн DUP (realtime + final) тай
         const out = await Promise.all(jobs);
         ov = out[0]; data = out[1];
         if (!prev) prev = out[2];
-        if (!heatDone && $('#heat')) { renderHeat(out[out.length - 1]); heatDone = true; }
+        if (!heatDone) { const h = out[out.length - 1]; snap.heat = h; if ($('#heat')) renderHeat(h); heatDone = true; }
       } catch (e) { setText('dbFlowSub', 'Холболт тасарсан: ' + esc(e.message)); return; }
       if (state.page !== 'dashboard' || !$('#dbKpi')) return;
+      snap.ov = ov; snap.rows = data.rows;
       const t = ov.totals, s = sumRows(data.rows);
       const online = ov.by_device.filter((d) => d.online).length, total = ov.by_device.length, offline = total - online;
       setText('dbNotice', offline ? `<div class="notice warn"><b>${offline} төхөөрөмж offline</b> — тоо дутуу байж болзошгүй. <a href="#devices">Төхөөрөмж хуудсанд шалгах →</a></div>` : '');
@@ -1369,6 +1389,75 @@ POST ${O}/api/camera/dup          — өдрийн DUP (realtime + final) тай
       setText('dbHgtSub', hTotal ? `${fmt(hTotal)} зочин · дундаж ${s.people ? Math.round(s.hsum / s.people) : '—'} см` : 'өгөгдөл алга');
       const lu = $('#lastUpd'); if (lu) lu.textContent = 'Шинэчилсэн ' + clockText();
     }
+    // Системээс авч болох бүх тоог нэг CSV-д хэсэг хэсгээр нь буулгана.
+    state.dbExport = () => {
+      const { ov, rows, heat } = snap;
+      if (!ov || !rows) return toast('Өгөгдөл ачаалж дуустал хүлээнэ үү', 'info');
+      const t = ov.totals, s = sumRows(rows), { from, to, days } = rangeDates();
+      const loc = state.locations.find((l) => String(l.id) === String(state.locationId));
+      const dev = state.devices.find((d) => d.sn === state.sn);
+      const gT = s.male + s.female + s.unknown;
+      const aT = s.age.reduce((a, b) => a + b, 0), hT = s.hgt.reduce((a, b) => a + b, 0);
+      const acAd = t.in_adult || 0, acCh = t.in_child || 0, acUn = Math.max(0, (t.in_count || 0) - acAd - acCh);
+      const L = [];
+      const sec = (title, head) => { L.push('', `[${title}]`); if (head) L.push(csvRow(head)); };
+      const pctOf = (v, tot) => (tot ? (v / tot * 100).toFixed(1) + '%' : '');
+
+      L.push(csvRow(['Footfall — бүрэн тайлан']));
+      L.push(csvRow(['Байгууллага', state.tenant ? state.tenant.name : 'Бүх байгууллага']));
+      L.push(csvRow(['Хугацаа', `${from.slice(0, 10)} .. ${to.slice(0, 10)}`, `${days} хоног`]));
+      L.push(csvRow(['Байршил', loc ? loc.name : 'Бүх байршил']));
+      L.push(csvRow(['Төхөөрөмж', dev ? (dev.name || dev.sn) : 'Бүх төхөөрөмж']));
+      L.push(csvRow(['Татсан', fmtDT(new Date().toISOString())]));
+
+      sec('НИЙТ ҮЗҮҮЛЭЛТ', ['Үзүүлэлт', 'Утга', 'Нэгж']);
+      [['Орсон', t.in_count, 'хүн'], ['Гарсан', t.out_count, 'хүн'], ['Өнгөрсөн', t.passby, 'хүн'],
+        ['Буцсан', t.turnback, 'хүн'], ['Одоо дотор байгаа', ov.occupancy.total, 'хүн'],
+        ['Насанд хүрэгч (орсон)', acAd, 'хүн'], ['Хүүхэд (орсон)', acCh, 'хүн'], ['Нас тодорхойгүй (орсон)', acUn, 'хүн'],
+        ['Тоолох бүсэд байсан дундаж', t.avg_stay_ms || 0, 'мс'],
+        ['Дэлгүүрт байсан дундаж', t.store_dwell_ms || '', 'мс'],
+        ['Дэлгүүрт байсан — зочны тоо', t.store_dwell_n || 0, 'зочин'],
+        ['Дэлгүүрт байсан — эх сурвалж', t.store_dwell_source || '', ''],
+        ['Зогссон зочин (босгоос удаан)', t.stay_count || 0, 'зочин'],
+        ['Зогсох босго', t.stay_threshold_ms || '', 'мс'],
+      ].forEach((r) => L.push(csvRow(r)));
+
+      sec('ЗОЧНЫ БҮТЭЦ', ['Бүлэг', 'Ангилал', 'Тоо', 'Хувь']);
+      [['Эрэгтэй', s.male], ['Эмэгтэй', s.female], ['Тодорхойгүй', s.unknown]]
+        .forEach(([k, v]) => L.push(csvRow(['Хүйс', k, v, pctOf(v, gT)])));
+      A_BANDS.forEach((b, i) => L.push(csvRow(['Насны бүлэг', b[1], s.age[i], pctOf(s.age[i], aT)])));
+      H_BANDS.forEach((b, i) => L.push(csvRow(['Өндөр', b[1], s.hgt[i], pctOf(s.hgt[i], hT)])));
+      L.push(csvRow(['Өндөр', 'Дундаж (см)', s.people ? Math.round(s.hsum / s.people) : '', '']));
+
+      sec('ТӨХӨӨРӨМЖӨӨР', ['Төхөөрөмж', 'SN', 'Байршил', 'Төлөв', 'Орсон', 'Гарсан', 'Өнгөрсөн', 'Буцсан']);
+      (ov.by_device || []).forEach((d) => L.push(csvRow([d.name || '', d.sn, d.location_name || '',
+        d.online ? 'Online' : 'Offline', d.in_count, d.out_count, d.passby, d.turnback])));
+
+      sec('БАЙРШЛААР', ['Байршил', 'Байгууллага', 'Төхөөрөмж', 'Online', 'Орсон', 'Гарсан', 'Өнгөрсөн', 'Буцсан']);
+      (ov.by_location || []).forEach((l) => L.push(csvRow([l.location_name, l.tenant_name || '', l.device_count,
+        l.online_count, l.in_count, l.out_count, l.passby, l.turnback])));
+
+      sec('ЦАГ ХУГАЦААНЫ ЦУВАА', ['Эхлэл', 'Орсон', 'Гарсан', 'Өнгөрсөн', 'Буцсан', 'Бүсэд байсан (мс)']);
+      (ov.series || []).forEach((r) => L.push(csvRow([bKey(r.bucket).replace('T', ' '), r.in_count, r.out_count, r.passby, r.turnback, r.avg_stay_ms || 0])));
+
+      if (heat && heat.length) {
+        sec('ӨДӨР × ЦАГ', ['Гараг', 'Цаг', 'Орсон']);
+        heat.forEach((r) => L.push(csvRow([DOW[r.dow - 1] || r.dow, r.hour, r.in_count])));
+      }
+
+      sec('30 МИНУТЫН ДЭЛГЭРЭНГҮЙ', ['Огноо', 'Цаг', 'Төхөөрөмж', 'SN', 'Байршил', 'Орсон', 'Гарсан', 'Буцсан', 'Өнгөрсөн',
+        'Бүсэд байсан (мс)', 'Дэлгүүрт байсан (мс)', 'Дэлгүүрт байсан (зочин)', 'Эр', 'Эм', 'Хүйс тодорхойгүй',
+        ...A_BANDS.map((b) => 'Нас ' + b[1]), ...H_BANDS.map((b) => 'Өндөр ' + b[1]), 'Дундаж өндөр (см)', 'Ажилтан']);
+      rows.forEach((r) => L.push(csvRow([bDate(r.bucket), bTime(r.bucket), r.device_name || '', r.sn, r.location_name || '',
+        r.in_count, r.out_count, r.turnback, r.passby, r.avg_stay_ms || 0, r.dwell_ms || '', r.dwell_n || 0,
+        r.male || 0, r.female || 0, r.gender_unknown || 0,
+        ...A_BANDS.map((b) => r['age_' + b[0]] || 0), ...H_BANDS.map((b) => r['h_' + b[0]] || 0),
+        r.avg_height_cm || '', r.staff || 0])));
+
+      downloadCsv(`footfall_${from.slice(0, 10)}_${to.slice(0, 10)}.csv`, L);
+      toast(`${fmt(rows.length)} мөр бүхий бүрэн тайлан татагдлаа`);
+    };
+
     await tick();
     state.liveTimers = [setInterval(tick, 10000)];
   }
