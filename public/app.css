@@ -174,6 +174,9 @@ input::placeholder { color: var(--muted); }
 .seg button { border: 0; background: transparent; padding: 0 11px; border-radius: 6px; cursor: pointer; color: var(--text-2); font-weight: 500; transition: background .15s, color .15s; white-space: nowrap; flex: none; font-size: 13px; }
 .seg button:hover { color: var(--text); }
 .seg button.active { background: var(--text); color: var(--surface); font-weight: 600; }
+/* Картын толгойд суух жижиг сэлгүүр — гарчгийн хажууд наалдаж, дэд бичиг баруун талдаа үлдэнэ */
+.seg.sm { height: 30px; padding: 2px; border-radius: 8px; box-shadow: none; margin-right: auto; overflow: visible; }
+.seg.sm button { padding: 0 9px; font-size: 12px; }
 .filters { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .filters select { max-width: 200px; }
 
@@ -185,7 +188,7 @@ input::placeholder { color: var(--muted); }
 @media (max-width: 1100px) { .g-2, .g-half { grid-template-columns: 1fr; } }
 .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow-2); padding: 20px 22px; min-width: 0; }
 .card.err { border-color: var(--bad); color: var(--bad); background: var(--bad-soft); }
-.card .head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 14px; }
+.card .head { display: flex; align-items: center; justify-content: space-between; gap: 10px 12px; margin-bottom: 14px; flex-wrap: wrap; }
 .card .head .sub { color: var(--muted); font-size: 12px; }
 .kpi { position: relative; transition: transform .15s, box-shadow .15s; padding: 16px 18px; }
 .kpi:hover { transform: translateY(-1px); box-shadow: 0 10px 24px -10px rgba(15,23,42,.18); }
