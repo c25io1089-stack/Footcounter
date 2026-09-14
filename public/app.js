@@ -669,17 +669,7 @@ Interface (анхдагч зөв бол хөндөхгүй):
           <a class="btn sm ghost" id="wNew" href="#" target="_blank" rel="noopener" title="Шинэ цонхонд нээх">↗</a></div>
         <form class="webui-bar" id="wF"><input type="text" id="wUrl" class="mono" spellcheck="false" autocomplete="off" aria-label="Төхөөрөмжийн хаяг" placeholder="http://192.168.1.50:8080/main.html" value="${esc(url0)}"><button type="submit" class="btn sm">Нээх</button></form>
         <div class="webui-frame" id="wFrame"></div>
-        <div class="webui-hint" id="wHint" hidden>
-          <b>Хоосон харагдаж байна уу? Браузер HTTP агуулгыг хориглосон байна.</b>
-          <p>Энэ самбар HTTPS-ээр, төхөөрөмж HTTP-ээр ажилладаг тул Chrome анхдагчаар хориглодог. Компьютер бүрт нэг удаа зөвшөөрөхөд энд шигтгэгдэж ачаалагдана:</p>
-          <ol>
-            <li>Хаягийн мөрөнд байгаа <b>🔒 түгжээ</b> дээр дарна → <b>Site settings</b></li>
-            <li><b>Insecure content</b> → <b>Allow</b> болгоно</li>
-            <li>Хуудсаа сэргээгээд энэ цонхыг дахин нээнэ</li>
-          </ol>
-          <p class="small">Chrome-ийн шинэ хувилбарууд дотоод сүлжээний хаяг руу хандахыг нэмж хязгаарладаг тул зарим тохиолдолд энэ ч тус болохгүй байж болно — тэр үед шинэ цонхонд нээнэ.</p>
-          <a class="btn primary sm" data-u href="#" target="_blank" rel="noopener">Шинэ цонхонд нээх ↗</a>
-        </div>
+        <div class="webui-hint" id="wHint" hidden></div>
         <p class="webui-note">Энэ хуудас төхөөрөмж дотор ажилладаг тул зөвхөн түүнтэй нэг сүлжээнд (дэлгүүрийн WiFi/кабель, VPN) байхад ачаална. Порт/зам өөр бол дээрх хаягийг засаад «Нээх» дарна — сонголт тухайн төхөөрөмжид хадгалагдана.</p>
       </div>`, (bg, close) => {
       bg.querySelector('.modal').classList.add('wide');
@@ -705,16 +695,32 @@ Interface (анхдагч зөв бол хөндөхгүй):
         const fr = document.createElement('iframe');
         fr.setAttribute('referrerpolicy', 'no-referrer');
         fr.setAttribute('sandbox', 'allow-scripts allow-forms allow-same-origin allow-popups allow-modals allow-downloads');
-        const mixed = location.protocol === 'https:' && u.startsWith('http://');
         const hint = bg.querySelector('#wHint');
-        if (hint) { hint.hidden = true; hint.querySelectorAll('[data-u]').forEach((a) => { a.href = u; }); }
+        if (hint) hint.hidden = true;
         let loaded = false;
         fr.onload = () => { loaded = true; };
         fr.src = u;
         box.appendChild(fr);
         // Хориглогдсон эсэхийг гаднаас нь уншиж болдоггүй тул хугацаагаар шүүнэ — ачаалагдвал
         // заавар гарахгүй, ачаалагдаагүй бол frame-ийг устгалгүйгээр доор нь зөвлөмж гаргана.
-        if (mixed && hint) setTimeout(() => { if (!loaded && bg.isConnected) hint.hidden = false; }, 2500);
+        // Шалтгаан нь өөр өөр тул зөвлөмжийг төхөөрөмжийн төлөвт тохируулна: offline байхад
+        // браузерын тохиргоо ямар ч тус болохгүй — тэгж хэлэх нь төөрөгдүүлнэ.
+        if (hint) setTimeout(() => {
+          if (loaded || !bg.isConnected) return;
+          const openBtn = `<a class="btn primary sm" href="${esc(u)}" target="_blank" rel="noopener">Шинэ цонхонд нээх ↗</a>`;
+          hint.innerHTML = d.online
+            ? `<b>Хоосон харагдаж байна уу?</b>
+               <p>Хоёр шалтгаан байж болно:</p>
+               <ol>
+                 <li><b>Та төхөөрөмжтэй нэг сүлжээнд байхгүй.</b> <span class="mono">${esc(u)}</span> бол дотоод сүлжээний хаяг — дэлгүүрийн WiFi/кабель, эсвэл VPN-ээр холбогдсон байх ёстой.</li>
+                 <li><b>Браузер HTTP агуулгыг хориглосон.</b> Энэ самбар HTTPS-ээр ажилладаг тул: хаягийн мөрний <b>🔒 түгжээ</b> → <b>Site settings</b> → <b>Insecure content</b> → <b>Allow</b> → хуудсаа сэргээнэ.</li>
+               </ol>
+               <p class="small">Chrome-ийн шинэ хувилбарууд дотоод сүлжээний хаяг руу хандахыг нэмж хязгаарладаг тул зөвшөөрсөн ч ажиллахгүй байж болно — тэр үед шинэ цонхонд нээнэ.</p>${openBtn}`
+            : `<b>Төхөөрөмж offline байна — хуудас нь нээгдэхгүй</b>
+               <p>Сүүлийн heartbeat ${esc(ago(d.last_heartbeat))}${d.last_heartbeat ? ` (${esc(fmtDT(d.last_heartbeat))})` : ''}. Төхөөрөмж унтраалттай эсвэл сүлжээнээс салсан байна — тэжээл, сүлжээг нь шалгаж, дахин холбогдсоны дараа оролдоно уу.</p>
+               <p class="small">Браузерын тохиргоо энэ тохиолдолд тус болохгүй.</p>${openBtn}`;
+          hint.hidden = false;
+        }, 2500);
       }
       bg.querySelector('#wF').onsubmit = (e) => { e.preventDefault(); load(bg.querySelector('#wUrl').value); };
       bg.querySelector('#wExp').onclick = () => bg.querySelector('.modal').classList.toggle('fs');
