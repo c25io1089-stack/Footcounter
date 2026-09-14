@@ -662,9 +662,11 @@ Interface (анхдагч зөв бол хөндөхгүй):
       try { const u = new URL(saved); u.hostname = d.ip_address; return u.toString().replace(/\/$/, ''); }
       catch { return cur; }
     })();
-    modal(`<h2>${esc(d.name || '(нэргүй)')}</h2>
+    modal(`<div class="det-head">
+      <h2>${esc(d.name || '(нэргүй)')}</h2>
       <div class="det-top"><span class="pill ${d.online ? 'on' : d.last_heartbeat ? 'off' : 'na'}"><i class="dot"></i>${d.online ? 'Online' : d.last_heartbeat ? 'Offline' : 'Мэдээгүй'}</span><span class="mono muted">${esc(d.sn)}</span></div>
       <div class="det-actions" id="dAct">${['superadmin', 'admin'].includes(state.user.role) ? '<button type="button" class="btn sm" data-act="edit">Засах</button><button type="button" class="btn sm ghost" data-act="resync">Дахин татах</button>' : ''}<button type="button" class="btn sm ghost" data-act="log">Лог</button></div>
+      </div>
       <div class="kv">
         ${kv('Байршил', d.location_name ? esc(d.location_name) : '<span class="pill warn">Оноогоогүй</span>')}
         ${kv('Байгууллага', esc(d.tenant_name || ''))}
