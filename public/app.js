@@ -682,7 +682,7 @@ Interface (анхдагч зөв бол хөндөхгүй):
         <div class="webui-hint" id="wHint" hidden></div>
         <p class="webui-note">Энэ хуудас төхөөрөмж дотор ажилладаг тул зөвхөн түүнтэй нэг сүлжээнд (дэлгүүрийн WiFi/кабель, VPN) байхад ачаална. Порт/зам өөр бол дээрх хаягийг засаад «Нээх» дарна — сонголт тухайн төхөөрөмжид хадгалагдана.</p>
       </div>`, (bg, close) => {
-      bg.querySelector('.modal').classList.add('wide');
+      bg.querySelector('.modal').classList.add('full');
       bg.querySelector('#dAct').onclick = (e) => {
         const a = e.target.closest('[data-act]'); if (!a) return;
         close();
