@@ -304,6 +304,7 @@ async function reidSummary(f) {
   const p2 = [];
   const persons = await query(
     `SELECT count(*)::int AS unique_visitors,
+       coalesce(sum(rp.visit_count),0)::int AS effective_traffic,
        count(*) FILTER (WHERE coalesce(rp.person_type,0)=0)::int AS customers,
        count(*) FILTER (WHERE rp.person_type=1)::int AS staff,
        count(*) FILTER (WHERE rp.person_type IN (2,3))::int AS riders_couriers,
@@ -328,7 +329,11 @@ async function reidSummary(f) {
      FROM reid_persons rp JOIN devices d ON d.sn=rp.master_sn
      WHERE 1=1 ${scope(f, p4)} ${dateRange(f, p4, 'rp.report_date')}
      GROUP BY 1 ORDER BY 1`, p4);
-  return { reports: reports.rows, summary: persons.rows[0], dwell_distribution: dwellDist.rows, daily: daily.rows };
+  // Төхөөрөмжийн ReID самбарын гурван тоо: Effective = нийт зочлолт, Unique = өөр хүний
+  // тоо, Repeat = үүнээс давсан давтан зочлолт (Effective − Unique).
+  const sm = persons.rows[0];
+  sm.repeat_visits = Math.max(0, sm.effective_traffic - sm.unique_visitors);
+  return { reports: reports.rows, summary: sm, dwell_distribution: dwellDist.rows, daily: daily.rows };
 }
 
 // DUP тайлан

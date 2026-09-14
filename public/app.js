@@ -558,6 +558,7 @@ Interface (анхдагч зөв бол хөндөхгүй):
   // хадгалагдана (хэрэглэгч бүрт өөрийн, серверт нөлөөлөхгүй).
   const DB_W = [
     ['Гол үзүүлэлт', [['k_in', 'Орсон'], ['k_out', 'Гарсан'], ['k_pass', 'Өнгөрсөн'], ['k_back', 'Буцсан'], ['k_occ', 'Одоо дотор байгаа']]],
+    ['ReID (давхардалгүй хүн)', [['k_eff', 'Бодит урсгал'], ['k_uniq', 'Давхардалгүй хүн'], ['k_rep', 'Давтан зочлолт']]],
     ['Картууд', [['c_flow', 'Урсгалын график'], ['c_prof', 'Зочны бүтэц'], ['c_heat', 'Өдөр × цагийн нягтрал']]],
     ['Зочны бүтцийн багана', [['p_gender', 'Хүйс'], ['p_ac', 'Насанд хүрэгч / Хүүхэд'], ['p_age', 'Насны бүлэг'], ['p_h', 'Өндөр']]],
   ];
@@ -1012,7 +1013,7 @@ POST ${O}/api/camera/dup          — өдрийн DUP (realtime + final) тай
 
   // Системээс авч болох бүх тоог нэг CSV-д хэсэг хэсгээр нь буулгана.
   // meta = { title, tenant, range, loc, dev }, ov = /dash/overview, rows = 30 минутын мөрүүд
-  function fullReportCsv(meta, ov, rows, heat, dedup) {
+  function fullReportCsv(meta, ov, rows, heat, dedup, reid) {
     const t = ov.totals, s = sumRows(rows);
     const gT = s.male + s.female + s.unknown;
     const aT = s.age.reduce((a, b) => a + b, 0), hT = s.hgt.reduce((a, b) => a + b, 0);
@@ -1068,6 +1069,24 @@ POST ${O}/api/camera/dup          — өдрийн DUP (realtime + final) тай
       sec('ДАВХАРДАЛГҮЙ — ӨДРӨӨР', ['Огноо', 'Master SN', 'Чиглэл', 'Түүхий', 'Давхардал', 'Давхардалгүй', 'Зочин', 'Зочин бус', 'Эцсийн тайлан']);
       (dedup.reports || []).forEach((r) => L.push(csvRow([String(r.report_date).slice(0, 10), r.master_sn, r.direction,
         r.raw_count, r.duplicate_count, r.deduped_count, r.customer_count, r.non_customer_count, r.is_final ? 'Тийм' : 'Үгүй'])));
+    }
+
+    // ReID — нэг хүнийг өдрийн турш дагаж таньсан тайлан (давтан ирэлт энд л гарна)
+    const rs = reid && reid.summary;
+    if (reid && (reid.reports || []).length) {
+      sec('REID — ДАВХАРДАЛГҮЙ ХҮН', ['Үзүүлэлт', 'Утга', 'Нэгж']);
+      [['Бодит урсгал (нийт зочлолт)', rs.effective_traffic, 'зочлолт'],
+        ['Давхардалгүй хүн', rs.unique_visitors, 'хүн'], ['Давтан зочлолт', rs.repeat_visits, 'зочлолт'],
+        ['Дахин ирсэн хүн', rs.repeat_visitors, 'хүн'], ['Дундаж зочлолт', rs.avg_visits, 'удаа/хүн'],
+        ['Дундаж байсан хугацаа', rs.avg_dwell_ms, 'мс'],
+        ['Зочин', rs.customers, 'хүн'], ['Ажилтан', rs.staff, 'хүн'], ['Rider/Courier', rs.riders_couriers, 'хүн'],
+        ['Эрэгтэй', rs.male, 'хүн'], ['Эмэгтэй', rs.female, 'хүн'],
+        ['Насанд хүрэгч', rs.adults, 'хүн'], ['Хүүхэд', rs.children, 'хүн'],
+      ].forEach((r) => L.push(csvRow(r)));
+      sec('REID — БАЙСАН ХУГАЦААНЫ ТАРХАЛТ', ['Хугацаа', 'Хүн']);
+      (reid.dwell_distribution || []).forEach((r) => L.push(csvRow([r.bucket, r.n])));
+      sec('REID — ӨДРӨӨР', ['Огноо', 'Давхардалгүй хүн', 'Зочин']);
+      (reid.daily || []).forEach((r) => L.push(csvRow([String(r.report_date).slice(0, 10), r.unique_visitors, r.customers])));
     }
 
     sec('ТӨХӨӨРӨМЖӨӨР', ['Төхөөрөмж', 'SN', 'Байршил', 'Төлөв', 'Орсон', 'Гарсан', 'Өнгөрсөн', 'Буцсан']);
@@ -1400,14 +1419,14 @@ POST ${O}/api/camera/dup          — өдрийн DUP (realtime + final) тай
       try { [ov, heat] = await Promise.all([api('/dash/overview' + qs2 + '&granularity=day'), api('/dash/flow/heatmap' + qs2)]); }
       catch (err) { return toast(err.message, 'error'); }
       // DUP тайлан заавал байдаггүй (өдрийн эцэст ирдэг) тул амжилтгүй бол тайланг тасалдуулахгүй
-      const dedup = await api('/dash/dedup' + qs2).catch(() => null);
+      const [dedup, reid] = await Promise.all([api('/dash/dedup' + qs2).catch(() => null), api('/dash/reid' + qs2).catch(() => null)]);
       const meta = {
         tenant: state.tenant ? state.tenant.name : 'Бүх байгууллага',
         range: `${f.from} .. ${f.to}`,
         loc: 'Бүх байршил', dev: 'Бүх төхөөрөмж',
         note: 'Хүснэгтийн баганын шүүлтүүр энэ файлд нөлөөлөхгүй — зөвхөн огнооны муж хамаарна.',
       };
-      downloadCsv(`footfall_${f.from}_${f.to}.csv`, fullReportCsv(meta, ov, rows, heat, dedup));
+      downloadCsv(`footfall_${f.from}_${f.to}.csv`, fullReportCsv(meta, ov, rows, heat, dedup, reid));
       toast(`${fmt(rows.length)} мөр бүхий бүрэн тайлан татагдлаа`);
     });
     const clock = () => setText('dtClock', clockText());
@@ -1443,6 +1462,18 @@ POST ${O}/api/camera/dup          — өдрийн DUP (realtime + final) тай
                  <div class="chart-wrap bar5"><canvas id="cHeight"></canvas></div></div>`) : ''}
         </div></div>` : ''}
       ${wOn('c_heat') ? `<div class="card section"><div class="head"><h2>Долоо хоногийн өдөр × цаг</h2><span class="sub">орсон хүний нягтрал</span></div><div id="heat"></div></div>` : ''}`;
+    // ReID ба DUP нь өдөрт нэг ирдэг тайлан тул 10 секунд тутам дахин татах утгагүй.
+    // Шүүлтүүр солигдвол render() дахин дуудагдаж энэ кэш шинээр эхэлнэ.
+    const DAILY_TTL = 3e5;
+    const daily = {};
+    const getDaily = async (key, path) => {
+      const e = daily[key];
+      if (e && Date.now() - e.at < DAILY_TTL) return e.v;
+      let v = null;
+      try { v = await api(path + qs()); } catch { v = e ? e.v : null; }
+      daily[key] = { v, at: Date.now() };
+      return v;
+    };
     const pmBtns = $('#dbPm');
     if (pmBtns) pmBtns.onclick = (e) => { const b = e.target.closest('[data-m]'); if (!b || b.dataset.m === pm) return; pmSet(b.dataset.m); render(); };
     let prev = null, heatDone = false;
@@ -1465,7 +1496,12 @@ POST ${O}/api/camera/dup          — өдрийн DUP (realtime + final) тай
       if (state.page !== 'dashboard' || !$('#dbKpi')) return;
       // Давхардалгүй горимд DUP тайлан нэмж хэрэгтэй (өдрийн эцэст ирдэг тусдаа багц)
       let dedup = null;
-      if (pm === 'eff') { try { dedup = await api('/dash/dedup' + qs()); } catch { dedup = null; } }
+      if (pm === 'eff') dedup = await getDaily('dedup', '/dash/dedup');
+      // ReID тайлан: давхардалгүй хүн, давтан зочлолт (төхөөрөмжийн ReID Analysis Metrics)
+      const reidOn = wOn('k_eff') || wOn('k_uniq') || wOn('k_rep');
+      const reid = reidOn ? await getDaily('reid', '/dash/reid') : null;
+      const rs = (reid && reid.summary) || null;
+      const rHas = !!(reid && reid.reports && reid.reports.length);
       const t = ov.totals, s = sumRows(data.rows);
       const online = ov.by_device.filter((d) => d.online).length, total = ov.by_device.length, offline = total - online;
       setText('dbNotice', offline ? `<div class="notice warn"><b>${offline} төхөөрөмж offline</b> — тоо дутуу байж болзошгүй. <a href="#devices">Төхөөрөмж хуудсанд шалгах →</a></div>` : '');
@@ -1475,6 +1511,14 @@ POST ${O}/api/camera/dup          — өдрийн DUP (realtime + final) тай
         wOn('k_pass') ? kpi({ label: 'Өнгөрсөн', value: fmt(t.passby), delta: { cur: t.passby, prev: prev.passby }, ico: 'pass', c: 4 }) : '',
         wOn('k_back') ? kpi({ label: 'Буцсан', value: fmt(t.turnback), delta: { cur: t.turnback, prev: prev.turnback }, ico: 'back', c: 5 }) : '',
         wOn('k_occ') ? kpi({ label: 'Одоо дотор байгаа', value: fmt(ov.occupancy.total), sub: ov.occupancy.devices.some((x) => x.from_snapshot) ? 'төхөөрөмжийн тоолол' : 'орсон − гарсан', ico: 'people', c: 3 }) : '',
+        // ReID тайлан ирээгүй үед 0 гэж бичвэл «хүн ирээгүй» гэсэн ойлголт төрүүлнэ —
+        // тайлан байхгүйг нь илэн далангүй хэлнэ.
+        wOn('k_eff') ? kpi({ label: 'Бодит урсгал', value: rHas ? fmt(rs.effective_traffic) : '—',
+          sub: rHas ? `${fmt(rs.unique_visitors)} хүн · ${fmt(rs.repeat_visits)} давтан` : 'ReID тайлан ирээгүй', ico: 'pulse', c: 7 }) : '',
+        wOn('k_uniq') ? kpi({ label: 'Давхардалгүй хүн', value: rHas ? fmt(rs.unique_visitors) : '—',
+          sub: rHas ? `${fmt(rs.repeat_visitors)} нь дахин ирсэн` : 'ReID тайлан ирээгүй', ico: 'users', c: 3 }) : '',
+        wOn('k_rep') ? kpi({ label: 'Давтан зочлолт', value: rHas ? fmt(rs.repeat_visits) : '—',
+          sub: rHas ? `бодит урсгалын ${pct(rs.repeat_visits, rs.effective_traffic)}` : 'ReID тайлан ирээгүй', ico: 'back', c: 4 }) : '',
       ].join(''));
       // 1 хоног → 30 минутын мөрүүдээс өөрсдөө нэгтгэнэ; бусад үед серверийн нэгтгэсэн
       // цуваа (ov.series) — мөрийн хязгаараас болж тайрагдахгүй.
