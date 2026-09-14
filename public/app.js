@@ -675,7 +675,7 @@ Interface (анхдагч зөв бол хөндөхгүй):
       </div>
       <div class="webui">
         <div class="webui-head">${icon('globe')}<b>Төхөөрөмжийн web UI</b><span class="sp"></span>
-          <button type="button" class="btn sm ghost" id="wExp" title="Томсгох">⤢</button>
+          <button type="button" class="btn sm ghost" id="wExp" title="Бүтэн дэлгэц (гарахдаа Esc)" aria-label="Бүтэн дэлгэц">⤢</button>
           <a class="btn sm ghost" id="wNew" href="#" target="_blank" rel="noopener" title="Шинэ цонхонд нээх">↗</a></div>
         <form class="webui-bar" id="wF"><input type="text" id="wUrl" class="mono" spellcheck="false" autocomplete="off" aria-label="Төхөөрөмжийн хаяг" placeholder="http://192.168.1.50:8080/main.html" value="${esc(url0)}"><button type="submit" class="btn sm">Нээх</button></form>
         <div class="webui-frame" id="wFrame"></div>
@@ -733,7 +733,16 @@ Interface (анхдагч зөв бол хөндөхгүй):
         }, 2500);
       }
       bg.querySelector('#wF').onsubmit = (e) => { e.preventDefault(); load(bg.querySelector('#wUrl').value); };
-      bg.querySelector('#wExp').onclick = () => bg.querySelector('.modal').classList.toggle('fs');
+      // Бүтэн дэлгэц: төхөөрөмжийн хуудсыг дэлгэц дүүрэн харуулна (Esc-ээр гарна).
+      // Браузер зөвшөөрөхгүй бол цонхыг томсгох хуучин аргаараа ажиллана.
+      bg.querySelector('#wExp').onclick = () => {
+        if (document.fullscreenElement) return document.exitFullscreen();
+        const box = bg.querySelector('.webui');
+        const fb = () => bg.querySelector('.modal').classList.toggle('fs');
+        // Зарим орчинд requestFullscreen нь promise биш, шууд алдаа шиддэг тул try/catch ч хэрэгтэй
+        try { const r = box.requestFullscreen && box.requestFullscreen(); if (r && r.catch) r.catch(fb); else if (!r) fb(); }
+        catch { fb(); }
+      };
       load(url0);
     });
   }

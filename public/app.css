@@ -369,6 +369,10 @@ tbody tr.live-row .pill { padding: 1px 7px; font-size: 10.5px; }
 .webui-frame { height: 56vh; background: #fff; }
 .modal.fs .kv { display: none; } /* томсгосон үед зөвхөн төхөөрөмжийн дэлгэц */
 .modal.fs .webui-frame { height: calc(96vh - 285px); min-height: 360px; }
+/* Бүтэн дэлгэц: толгой, хаягийн мөр дээрээ, үлдсэн бүх зайг төхөөрөмжийн хуудас эзэлнэ */
+.webui:fullscreen { display: flex; flex-direction: column; border: 0; border-radius: 0; background: var(--surface); }
+.webui:fullscreen .webui-frame { flex: 1; height: auto; min-height: 0; }
+.webui:fullscreen .webui-note { flex: none; }
 .webui-frame iframe { display: block; width: 100%; height: 100%; border: 0; }
 .webui-msg { height: 100%; display: grid; place-content: center; justify-items: center; gap: 10px; padding: 24px; text-align: center; background: var(--surface-2); color: var(--text-2); font-size: 13px; }
 .webui-msg p { margin: 0; max-width: 46ch; color: var(--muted); }
