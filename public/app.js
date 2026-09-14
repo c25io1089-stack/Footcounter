@@ -642,7 +642,17 @@ Interface (анхдагч зөв бол хөндөхгүй):
   function deviceDetailModal(d, f) {
     if (!d) return;
     const kv = (k, v) => `<div><span class="k">${k}</span><span class="v">${v == null || v === '' ? '—' : v}</span></div>`;
-    const url0 = lsGet(webKey(d.sn)) || (d.ip_address ? 'http://' + d.ip_address : '');
+    // Хадгалсан хаяг нь төхөөрөмжийн ОДООГИЙН IP-г агуулаагүй бол хуучирсан гэж үзнэ
+    // (төхөөрөмж өөр сүлжээнд шилжихэд IP нь солигддог). Порт/замын тохируулгыг нь
+    // шинэ IP дээр дахин хэрэглэнэ — хэрэглэгчийн сонголт үрэгдэхгүй.
+    const url0 = (() => {
+      const saved = lsGet(webKey(d.sn));
+      const cur = d.ip_address ? 'http://' + d.ip_address : '';
+      if (!saved) return cur;
+      if (!d.ip_address || saved.includes(d.ip_address)) return saved;
+      try { const u = new URL(saved); u.hostname = d.ip_address; return u.toString().replace(/\/$/, ''); }
+      catch { return cur; }
+    })();
     modal(`<h2>${esc(d.name || '(нэргүй)')}</h2>
       <div class="det-top"><span class="pill ${d.online ? 'on' : d.last_heartbeat ? 'off' : 'na'}"><i class="dot"></i>${d.online ? 'Online' : d.last_heartbeat ? 'Offline' : 'Мэдээгүй'}</span><span class="mono muted">${esc(d.sn)}</span></div>
       <div class="det-actions" id="dAct">${['superadmin', 'admin'].includes(state.user.role) ? '<button type="button" class="btn sm" data-act="edit">Засах</button><button type="button" class="btn sm ghost" data-act="resync">Дахин татах</button>' : ''}<button type="button" class="btn sm ghost" data-act="log">Лог</button></div>
