@@ -320,10 +320,16 @@ tbody tr.live-row .pill { padding: 1px 7px; font-size: 10.5px; }
 /* Төхөөрөмжийн дэлгэрэнгүй + шигтгэсэн web UI */
 .modal.wide { width: min(1080px, 100%); }
 .modal.fs { width: min(1600px, 100%); max-height: 96vh; }
-/* Төхөөрөмжийн дэлгэрэнгүй: цонх дэлгэцээ дүүргэж, үлдсэн бүх зайг web UI эзэлнэ */
-.modal.full { width: 100%; max-height: none; height: calc(100vh - 32px); display: flex; flex-direction: column; }
+/* Төхөөрөмжийн дэлгэрэнгүй — цонх биш, бүтэн хуудас шиг: захын зай, бүдгэрсэн дэвсгэр,
+   мөлгөр булан, сүүдэр, нээгдэх хөдөлгөөнгүй. Дээр нь хөвж байгаа мэдрэмж төрүүлэхгүй. */
+.modal-bg.sheet { padding: 0; background: var(--bg); backdrop-filter: none; animation: none; }
+.modal.full { width: 100%; height: 100vh; max-height: none; border: 0; border-radius: 0; box-shadow: none;
+  padding: 20px 26px 22px; display: flex; flex-direction: column; animation: none; }
+.modal.full > .x { top: 18px; right: 20px; }
+.modal.full .kv { grid-template-columns: repeat(auto-fit, minmax(158px, 1fr)); gap: 10px 18px; margin-bottom: 14px; }
 .modal.full .webui { flex: 1; display: flex; flex-direction: column; min-height: 0; }
-.modal.full .webui-frame { flex: 1; height: auto; min-height: 240px; }
+.modal.full .webui-frame { flex: 1; height: auto; min-height: 320px; }
+.modal.full .webui-note { padding: 7px 12px; font-size: 11.5px; }
 /* Төхөөрөмжийн хүснэгт: мөр бүхэлдээ дарагдана, үйлдлийн багана баруун талд наалдана */
 .dev-tbl tbody tr { cursor: pointer; }
 .dev-tbl tbody tr:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }

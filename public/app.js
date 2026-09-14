@@ -674,7 +674,7 @@ Interface (анхдагч зөв бол хөндөхгүй):
         ${f ? kv('Орсон / Гарсан', `${fmt(f.in_count)} / ${fmt(f.out_count)} <span class="muted small">(сонгосон хугацаа)</span>`) : ''}
       </div>
       <div class="webui">
-        <div class="webui-head">${icon('globe')}<b>Төхөөрөмжийн web UI</b><span class="sp"></span>
+        <div class="webui-head">${icon('globe')}<b>Төхөөрөмжийн web</b><span class="sp"></span>
           <button type="button" class="btn sm ghost" id="wExp" title="Бүтэн дэлгэц (гарахдаа Esc)" aria-label="Бүтэн дэлгэц">⤢</button>
           <a class="btn sm ghost" id="wNew" href="#" target="_blank" rel="noopener" title="Шинэ цонхонд нээх">↗</a></div>
         <form class="webui-bar" id="wF"><input type="text" id="wUrl" class="mono" spellcheck="false" autocomplete="off" aria-label="Төхөөрөмжийн хаяг" placeholder="http://192.168.1.50:8080/main.html" value="${esc(url0)}"><button type="submit" class="btn sm">Нээх</button></form>
@@ -682,7 +682,7 @@ Interface (анхдагч зөв бол хөндөхгүй):
         <div class="webui-hint" id="wHint" hidden></div>
         <p class="webui-note">Энэ хуудас төхөөрөмж дотор ажилладаг тул зөвхөн түүнтэй нэг сүлжээнд (дэлгүүрийн WiFi/кабель, VPN) байхад ачаална. Порт/зам өөр бол дээрх хаягийг засаад «Нээх» дарна — сонголт тухайн төхөөрөмжид хадгалагдана.</p>
       </div>`, (bg, close) => {
-      bg.querySelector('.modal').classList.add('full');
+      bg.classList.add('sheet'); bg.querySelector('.modal').classList.add('full');
       bg.querySelector('#dAct').onclick = (e) => {
         const a = e.target.closest('[data-act]'); if (!a) return;
         close();
