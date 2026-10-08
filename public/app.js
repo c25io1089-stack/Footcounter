@@ -466,22 +466,25 @@
     // Мөрийн үйлдлүүд. Нэг л сонголт байвал цэс нээх нь илүүц тул шууд товч болгоно.
     const rowItems = (d) => [
       { label: 'Дэлгэрэнгүй', run: () => deviceDetailModal(d, fm[d.sn]) },
-      ...(isSuper ? [{ label: 'Устгах', danger: true, run: () => deleteDevice(d.sn) }] : []),
+      ...(isSuper ? [{ label: 'Байгууллага солих', run: () => moveTenantModal(d) },
+        { label: 'Устгах', danger: true, run: () => deleteDevice(d.sn) }] : []),
     ];
+    const nCols = isSuper ? 9 : 10;
     $('#page').innerHTML = `<div class="stack">
       ${unassigned.length ? `<div class="card" style="border-color:var(--warn)"><b>⚠ ${unassigned.length} шинэ төхөөрөмж байршилд оноогдоогүй байна.</b> <span class="muted">Төхөөрөмж сервер рүү өгөгдөл илгээж эхэлмэгц энд автоматаар бүртгэгдэнэ — нэр, байршил оноож өгнө үү.</span></div>` : ''}
-      <div class="card"><div class="tbl-wrap"><table class="dev-tbl"><thead><tr><th>Төлөв</th><th>Нэр / SN</th><th>Байршил</th><th>Сүүлийн heartbeat</th><th>Сүүлийн өгөгдөл</th><th>Холболт</th><th>Firmware</th>${isSuper ? '' : '<th class="num">Орсон</th><th class="num">Гарсан</th>'}<th></th></tr></thead><tbody>
+      <div class="card"><div class="tbl-wrap"><table class="dev-tbl"><thead><tr><th>Төлөв</th><th>Нэр / SN</th>${isSuper ? '<th>Байгууллага</th>' : ''}<th>Байршил</th><th>Сүүлийн heartbeat</th><th>Сүүлийн өгөгдөл</th><th>Холболт</th><th>Firmware</th>${isSuper ? '' : '<th class="num">Орсон</th><th class="num">Гарсан</th>'}<th></th></tr></thead><tbody>
         ${devs.map((d) => `<tr data-sn="${esc(d.sn)}" tabindex="0" role="button" aria-label="${esc(d.name || d.sn)} — дэлгэрэнгүй">
           <td><span class="pill ${d.online ? 'on' : d.last_heartbeat ? 'off' : 'na'}"><i class="dot"></i>${d.online ? 'Online' : d.last_heartbeat ? 'Offline' : 'Мэдээгүй'}</span></td>
           <td><b>${esc(d.name || '(нэргүй)')}</b><br><span class="mono muted">${esc(d.sn)}</span></td>
-          <td>${d.location_name ? esc(d.location_name) + '<br><span class="small muted">' + esc(d.tenant_name || '') + '</span>' : '<span class="pill warn">Оноогоогүй</span>'}</td>
+          ${isSuper ? `<td>${d.tenant_name ? esc(d.tenant_name) : '<span class="pill warn">Хуваарилаагүй</span>'}</td>` : ''}
+          <td>${d.location_name ? esc(d.location_name) : '<span class="pill warn">Оноогоогүй</span>'}</td>
           <td title="${fmtDT(d.last_heartbeat)}">${ago(d.last_heartbeat)}</td><td title="${fmtDT(d.last_data_at)}">${ago(d.last_data_at)}</td>
           <td class="small">${esc(d.connection_type || '—')} · ${esc(d.ip_address || '—')}<br><span class="muted mono">${esc(d.mac_address || '')}</span></td>
           <td class="small">${esc(d.sw_release || '—')}<br><span class="muted">${esc(d.hw_platform || '')} · ${d.upload_interval === 0 ? 'бодит цаг' : d.upload_interval + ' мин'} · ${d.data_mode}</span>${d.clock_skew_sec ? `<br><span class="pill warn" title="Төхөөрөмжийн цаг серверээс ${Math.round(d.clock_skew_sec / 60)} минут зөрүүтэй илгээж байна — сервер автоматаар засаж хадгална">цаг ${(d.clock_skew_sec / 3600).toFixed(d.clock_skew_sec % 3600 ? 1 : 0)}ц зөрүү · засаж байна</span>` : ''}</td>
           ${isSuper ? '' : `<td class="num">${fmt(fm[d.sn] ? fm[d.sn].in_count : 0)}</td><td class="num">${fmt(fm[d.sn] ? fm[d.sn].out_count : 0)}</td>`}
           <td><div class="row-actions">${rowItems(d).length > 1
             ? `<button class="btn sm ghost icon" data-menu="${esc(d.sn)}" title="Үйлдэл" aria-label="Үйлдэл" aria-haspopup="menu" aria-expanded="false">⋮</button>`
-            : `<button class="btn sm ghost" data-menu="${esc(d.sn)}">${esc(rowItems(d)[0].label)}</button>`}</div></td></tr>`).join('') || `<tr><td colspan="10"><div class="empty-state"><div class="ico">${icon('device')}</div><b>Төхөөрөмж хараахан холбогдоогүй</b><p>Төхөөрөмжийн Data Push тохиргоонд доорх серверийн хаягийг оруулмагц эхний heartbeat-ээр энд автоматаар гарч ирнэ.</p></div></td></tr>`}
+            : `<button class="btn sm ghost" data-menu="${esc(d.sn)}">${esc(rowItems(d)[0].label)}</button>`}</div></td></tr>`).join('') || `<tr><td colspan="${nCols}"><div class="empty-state"><div class="ico">${icon('device')}</div><b>Төхөөрөмж хараахан холбогдоогүй</b><p>Төхөөрөмжийн Data Push тохиргоонд доорх серверийн хаягийг оруулмагц эхний heartbeat-ээр энд автоматаар гарч ирнэ.</p></div></td></tr>`}
       </tbody></table></div></div>
       <div class="card"><div class="head"><h2>Шинэ төхөөрөмж холбох</h2>${canEdit ? '<button class="btn primary" id="claimBtn">+ SN-ээр нэмэх</button>' : ''}</div>
         <details ${devs.length ? '' : 'open'}><summary>Төхөөрөмжийн тохиргооны заавар (Data Push)</summary>
@@ -539,6 +542,38 @@ Interface (анхдагч зөв бол хөндөхгүй):
       bg.querySelector('#f').onsubmit = async (e) => { e.preventDefault(); try { const d = await api('/dash/devices/claim', { method: 'POST', body: Object.fromEntries(new FormData(e.target)) }); toast(isSuper ? `${d.sn} хуваарилагдлаа` : 'Төхөөрөмж нэмэгдлээ'); close(); await loadMeta(); fillLocationSelects(); render(); } catch (err) { toast(err.message, 'error'); } };
     });
   }
+  // superadmin: төхөөрөмжийг нэг байгууллагаас нөгөөд шилжүүлнэ. Байршил нь хуучин
+  // байгууллагынх тул заавал дахин сонгоно (эсвэл хоосон орхиод шинэ админ нь өөрөө онооно).
+  function moveTenantModal(d) {
+    // Байгууллага нь хэвээр үлдвэл одоогийн байршлыг сонгосон хэвээр үлдээнэ — өөрөөр бол
+    // «солих» цонхыг нээгээд хаахад л байршил нь санамсаргүй цуцлагдана.
+    const locOpts = (tid) => `<option value="">— Дараа нь оноох —</option>`
+      + state.locations.filter((l) => tid && String(l.tenant_id) === String(tid))
+        .map((l) => `<option value="${l.id}" ${l.id === d.location_id ? 'selected' : ''}>${esc(l.name)}</option>`).join('');
+    modal(`<h2>Байгууллага солих</h2>
+      <div class="muted small" style="margin-bottom:10px"><b>${esc(d.name || '(нэргүй)')}</b> · <span class="mono">${esc(d.sn)}</span></div>
+      <form class="form" id="f">
+        <label>Одоогийн байгууллага<input value="${esc(d.tenant_name || 'Хуваарилаагүй')}" disabled></label>
+        <label>Шинэ байгууллага<select name="tenant_id" id="mTenant"><option value="">— Хуваарилаагүй —</option>${state.tenants.map((t) => `<option value="${t.id}" ${t.id === d.tenant_id ? 'selected' : ''}>${esc(t.name)}</option>`).join('')}</select></label>
+        <label>Байршил<select name="location_id" id="mLoc">${locOpts(d.tenant_id)}</select></label>
+        <p class="small muted">Энэ төхөөрөмжийн <b>өмнөх бүх өгөгдөл</b> хамт шилжинэ — хуучин байгууллага түүнийг цаашид харахгүй. Байршил нь хуучин байгууллагынх тул шинэ байгууллагад шинээр сонгоно (эсвэл хоосон үлдээвэл тэндхийн админ өөрөө онооно).</p>
+        <div class="actions"><button type="button" class="btn" data-close>Болих</button><button class="btn primary">Шилжүүлэх</button></div></form>`,
+    (bg, close) => {
+      bg.querySelector('[data-close]').onclick = close;
+      const mt = bg.querySelector('#mTenant');
+      mt.onchange = () => { bg.querySelector('#mLoc').innerHTML = locOpts(mt.value); };
+      bg.querySelector('#f').onsubmit = async (e) => {
+        e.preventDefault();
+        const f = Object.fromEntries(new FormData(e.target));
+        try {
+          await api('/dash/devices/' + d.sn, { method: 'PUT', body: { tenant_id: f.tenant_id, location_id: f.location_id } });
+          toast(f.tenant_id ? `${d.name || d.sn} → ${(state.tenants.find((t) => String(t.id) === String(f.tenant_id)) || {}).name}` : 'Хуваарилалт цуцлагдлаа');
+          close(); await loadMeta(); fillLocationSelects(); render();
+        } catch (err) { toast(err.message, 'error'); }
+      };
+    });
+  }
+
   async function deleteDevice(sn) {
     if (!await confirmDlg(`${sn} төхөөрөмжийг бүх өгөгдөл, heartbeat логтой нь хамт бүрмөсөн устгах уу? Төхөөрөмж дахин heartbeat илгээвэл хуваарилаагүй байдлаар дахин бүртгэгдэнэ.`, { danger: true })) return;
     try { await api('/dash/devices/' + sn, { method: 'DELETE' }); toast('Төхөөрөмж устгагдлаа'); await loadMeta(); fillLocationSelects(); render(); }
