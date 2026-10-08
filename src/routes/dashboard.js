@@ -9,6 +9,7 @@ async function log(path, sn, status, message, body) {
 const { query } = db;
 const auth = require('../lib/auth');
 const stats = require('../lib/stats');
+const report = require('../lib/report');
 
 const router = express.Router();
 
@@ -104,7 +105,7 @@ router.get('/admin/summary', auth.requireRole('superadmin'), wrap(async (req, re
 
 // ---- Өгөгдөл (зөвхөн байгууллагын admin/viewer; superadmin байгууллагын өгөгдлийг харахгүй) ----
 const tenantData = auth.requireRole('admin', 'viewer');
-router.use(['/overview', '/live', '/data', '/flow', '/occupancy', '/demographics', '/events', '/reid', '/dedup'], tenantData);
+router.use(['/overview', '/live', '/data', '/flow', '/occupancy', '/demographics', '/events', '/reid', '/dedup', '/report.xlsx'], tenantData);
 // 30 минутын нэгтгэл (Өгөгдөл хуудас + Хяналтын самбар)
 router.get('/data', wrap(async (req, res) => res.json(await stats.dataBuckets(filters(req)))));
 // Бодит цагийн самбар: одоо байгаа хүн, өнөөдрийн нийлбэр (from/to query), сүүлийн 60 минут минутаар, сүүлийн 1 цагийн хүн бүрийн үйл явдал, төхөөрөмжийн төлөв
@@ -137,6 +138,64 @@ router.get('/demographics', wrap(async (req, res) => res.json(await stats.demogr
 router.get('/events', wrap(async (req, res) => res.json(await stats.personEvents(filters(req)))));
 router.get('/reid', wrap(async (req, res) => res.json(await stats.reidSummary(filters(req)))));
 router.get('/dedup', wrap(async (req, res) => res.json(await stats.dedupSummary(filters(req)))));
+
+// ---- Бүрэн тайлан (.xlsx). Хөтчөөс шууд татдаг тул cookie-гоор нэвтэрнэ. ----
+const A_BANDS = [['0_16', '0–16'], ['17_30', '17–30'], ['31_45', '31–45'], ['46_60', '46–60'], ['61p', '61+'], ['unknown', 'Тодорхойгүй']];
+const H_BANDS = [['u150', '< 150 см'], ['150_164', '150–164 см'], ['165_179', '165–179 см'], ['180p', '180+ см'], ['unknown', 'Өндөр тодорхойгүй']];
+const DUP_AGE_BANDS = [['0_9', '0–9'], ['10_16', '10–16'], ['17_30', '17–30'], ['31_45', '31–45'], ['46_60', '46–60'], ['61_plus', '61+'], ['unknown', 'Тодорхойгүй']];
+// Файлын нэрэнд зөвхөн аюулгүй тэмдэгт (Content-Disposition эвдрэхээс сэргийлнэ)
+const safeName = (s) => String(s || '').replace(/[^A-Za-z0-9._-]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 60) || 'report';
+
+const REPORT_ROW_CAP = 5000;   // stats.dataBuckets-ийн дээд хязгаар
+router.get('/report.xlsx', wrap(async (req, res) => {
+  // Хуудсан дээрх хүснэгт 2000 мөрөөр хязгаарладаг ч тайланд боломжит бүхнийг нь авна
+  const f = { ...filters(req), limit: REPORT_ROW_CAP };
+  const [totals, occupancy, byLocation, byDevice, series, data, heat, dedup, locs, devs] = await Promise.all([
+    stats.flowTotals(f), stats.currentOccupancy(f), stats.flowByLocation(f), stats.flowByDevice(f),
+    stats.flowSeries({ ...f, granularity: 'day' }), stats.dataBuckets(f), stats.heatmap(f),
+    stats.dedupSummary(f).catch(() => null),
+    stats.listLocations(f.tenantId), stats.listDevices(f),
+  ]);
+  const tenant = req.user.tid ? (await query('SELECT name FROM tenants WHERE id=$1', [req.user.tid])).rows[0] : null;
+
+  // Шүүлтүүрт сонгосон нэрсийг тайлангийн толгойд бичнэ — файлыг дангаар нь
+  // хараад ямар хамрах хүрээтэй болох нь ойлгогдох ёстой.
+  const want = (v) => (v == null ? null : new Set([].concat(v).map(String)));
+  const wl = want(f.locationId), wd = want(f.sn);
+  const names = (arr, pick, sel) => {
+    const a = arr.filter((x) => !sel || sel.has(String(pick(x).id))).map((x) => pick(x).name).filter(Boolean);
+    return a.length ? a.join(', ') : null;
+  };
+  const rows = data.rows || [];
+  const profile = rows.reduce((a, r) => {
+    a.male += r.male || 0; a.female += r.female || 0; a.gender_unknown += r.gender_unknown || 0;
+    A_BANDS.forEach((b, i) => { a.age[i] += r['age_' + b[0]] || 0; });
+    H_BANDS.forEach((b, i) => { a.hgt[i] += r['h_' + b[0]] || 0; });
+    a.people += r.people || 0; a.hsum += (r.avg_height_cm || 0) * (r.people || 0);
+    return a;
+  }, { male: 0, female: 0, gender_unknown: 0, age: A_BANDS.map(() => 0), hgt: H_BANDS.map(() => 0), people: 0, hsum: 0 });
+
+  const meta = {
+    tenant: tenant ? tenant.name : 'Бүх байгууллага',
+    from: (f.from || '').slice(0, 10) || '—',
+    to: (f.to || '').slice(0, 10) || '—',
+    tz: f.tz,
+    loc: names(locs, (x) => ({ id: x.id, name: x.name }), wl) || 'Бүх байршил',
+    dev: names(devs, (x) => ({ id: x.sn, name: x.name || x.sn }), wd) || 'Бүх төхөөрөмж',
+    ageBands: A_BANDS, hBands: H_BANDS, dupAgeBands: DUP_AGE_BANDS,
+  };
+  meta.rowCap = rows.length >= REPORT_ROW_CAP ? REPORT_ROW_CAP : 0;
+  const wb = await report.buildWorkbook({ meta, totals, occupancy, byDevice, byLocation, series, rows, heat, dedup, profile });
+
+  // Кирилл нэр ASCII гарчигт багтахгүй тул RFC 5987-оор давхар өгнө
+  const human = `Footfall ${meta.tenant} ${meta.from}_${meta.to}.xlsx`;
+  const fname = `footfall_${safeName(meta.tenant)}_${meta.from}_${meta.to}.xlsx`;
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  res.setHeader('Content-Disposition', `attachment; filename="${fname}"; filename*=UTF-8''${encodeURIComponent(human)}`);
+  res.setHeader('Cache-Control', 'no-store');
+  await wb.xlsx.write(res);
+  res.end();
+}));
 router.get('/locations', wrap(async (req, res) => res.json(await stats.listLocations(auth.tenantScope(req)))));
 router.get('/devices', wrap(async (req, res) => res.json(await stats.listDevices(filters(req)))));
 // Төхөөрөмж хэрэглэгчийн хамрах хүрээнд байгаа эсэх (superadmin → бүгд; бусад → өөрийн tenant эсвэл оноогдоогүй)
