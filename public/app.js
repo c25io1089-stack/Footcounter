@@ -466,6 +466,7 @@
     // Мөрийн үйлдлүүд. Нэг л сонголт байвал цэс нээх нь илүүц тул шууд товч болгоно.
     const rowItems = (d) => [
       { label: 'Дэлгэрэнгүй', run: () => deviceDetailModal(d, fm[d.sn]) },
+      ...(canEdit ? [{ label: 'Өгөгдөл цэвэрлэх…', danger: true, run: () => purgeModal(d) }] : []),
       ...(isSuper ? [{ label: 'Байгууллага солих', run: () => moveTenantModal(d) },
         { label: 'Устгах', danger: true, run: () => deleteDevice(d.sn) }] : []),
     ];
@@ -691,7 +692,7 @@ Interface (анхдагч зөв бол хөндөхгүй):
     modal(`<div class="det-head">
       <h2>${esc(d.name || '(нэргүй)')}</h2>
       <div class="det-top"><span class="pill ${d.online ? 'on' : d.last_heartbeat ? 'off' : 'na'}"><i class="dot"></i>${d.online ? 'Online' : d.last_heartbeat ? 'Offline' : 'Мэдээгүй'}</span><span class="mono muted">${esc(d.sn)}</span></div>
-      <div class="det-actions" id="dAct">${['superadmin', 'admin'].includes(state.user.role) ? '<button type="button" class="btn sm" data-act="edit">Засах</button><button type="button" class="btn sm ghost" data-act="resync">Дахин татах</button>' : ''}<button type="button" class="btn sm ghost" data-act="log">Лог</button></div>
+      <div class="det-actions" id="dAct">${['superadmin', 'admin'].includes(state.user.role) ? '<button type="button" class="btn sm" data-act="edit">Засах</button><button type="button" class="btn sm ghost" data-act="resync">Дахин татах</button><button type="button" class="btn sm ghost danger" data-act="purge">Өгөгдөл цэвэрлэх</button>' : ''}<button type="button" class="btn sm ghost" data-act="log">Лог</button></div>
       </div>
       <div class="kv">
         ${kv('Байршил', d.location_name ? esc(d.location_name) : '<span class="pill warn">Оноогоогүй</span>')}
@@ -725,6 +726,7 @@ Interface (анхдагч зөв бол хөндөхгүй):
         close();
         if (a.dataset.act === 'edit') deviceModal(d);
         else if (a.dataset.act === 'resync') resyncModal(d.sn);
+        else if (a.dataset.act === 'purge') purgeModal(d);
         else heartbeatModal(d);
       };
       const box = bg.querySelector('#wFrame'), link = bg.querySelector('#wNew');
