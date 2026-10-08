@@ -558,7 +558,6 @@ Interface (анхдагч зөв бол хөндөхгүй):
   // хадгалагдана (хэрэглэгч бүрт өөрийн, серверт нөлөөлөхгүй).
   const DB_W = [
     ['Гол үзүүлэлт', [['k_in', 'Орсон'], ['k_out', 'Гарсан'], ['k_pass', 'Өнгөрсөн'], ['k_back', 'Буцсан'], ['k_occ', 'Одоо дотор байгаа']]],
-    ['ReID (давхардалгүй хүн)', [['k_eff', 'Бодит урсгал'], ['k_uniq', 'Давхардалгүй хүн'], ['k_rep', 'Давтан зочлолт']]],
     ['Картууд', [['c_flow', 'Урсгалын график'], ['c_prof', 'Зочны бүтэц'], ['c_heat', 'Өдөр × цагийн нягтрал']]],
     ['Зочны бүтцийн багана', [['p_gender', 'Хүйс'], ['p_ac', 'Насанд хүрэгч / Хүүхэд'], ['p_age', 'Насны бүлэг'], ['p_h', 'Өндөр']]],
   ];
@@ -1464,7 +1463,7 @@ POST ${O}/api/camera/dup          — өдрийн DUP (realtime + final) тай
                  <div class="chart-wrap bar5"><canvas id="cHeight"></canvas></div></div>`) : ''}
         </div></div>` : ''}
       ${wOn('c_heat') ? `<div class="card section"><div class="head"><h2>Долоо хоногийн өдөр × цаг</h2><span class="sub">орсон хүний нягтрал</span></div><div id="heat"></div></div>` : ''}`;
-    // ReID ба DUP нь өдөрт нэг ирдэг тайлан тул 10 секунд тутам дахин татах утгагүй.
+    // DUP нь өдөрт нэг ирдэг тайлан тул 10 секунд тутам дахин татах утгагүй.
     // Шүүлтүүр солигдвол render() дахин дуудагдаж энэ кэш шинээр эхэлнэ.
     const DAILY_TTL = 3e5;
     const daily = {};
@@ -1499,11 +1498,6 @@ POST ${O}/api/camera/dup          — өдрийн DUP (realtime + final) тай
       // Давхардалгүй горимд DUP тайлан нэмж хэрэгтэй (өдрийн эцэст ирдэг тусдаа багц)
       let dedup = null;
       if (pm === 'eff') dedup = await getDaily('dedup', '/dash/dedup');
-      // ReID тайлан: давхардалгүй хүн, давтан зочлолт (төхөөрөмжийн ReID Analysis Metrics)
-      const reidOn = wOn('k_eff') || wOn('k_uniq') || wOn('k_rep');
-      const reid = reidOn ? await getDaily('reid', '/dash/reid') : null;
-      const rs = (reid && reid.summary) || null;
-      const rHas = !!(reid && reid.reports && reid.reports.length);
       const t = ov.totals, s = sumRows(data.rows);
       const online = ov.by_device.filter((d) => d.online).length, total = ov.by_device.length, offline = total - online;
       setText('dbNotice', offline ? `<div class="notice warn"><b>${offline} төхөөрөмж offline</b> — тоо дутуу байж болзошгүй. <a href="#devices">Төхөөрөмж хуудсанд шалгах →</a></div>` : '');
@@ -1513,14 +1507,6 @@ POST ${O}/api/camera/dup          — өдрийн DUP (realtime + final) тай
         wOn('k_pass') ? kpi({ label: 'Өнгөрсөн', value: fmt(t.passby), delta: { cur: t.passby, prev: prev.passby }, ico: 'pass', c: 4 }) : '',
         wOn('k_back') ? kpi({ label: 'Буцсан', value: fmt(t.turnback), delta: { cur: t.turnback, prev: prev.turnback }, ico: 'back', c: 5 }) : '',
         wOn('k_occ') ? kpi({ label: 'Одоо дотор байгаа', value: fmt(ov.occupancy.total), sub: ov.occupancy.devices.some((x) => x.from_snapshot) ? 'төхөөрөмжийн тоолол' : 'орсон − гарсан', ico: 'people', c: 3 }) : '',
-        // ReID тайлан ирээгүй үед 0 гэж бичвэл «хүн ирээгүй» гэсэн ойлголт төрүүлнэ —
-        // тайлан байхгүйг нь илэн далангүй хэлнэ.
-        wOn('k_eff') ? kpi({ label: 'Бодит урсгал', value: rHas ? fmt(rs.effective_traffic) : '—',
-          sub: rHas ? `${fmt(rs.unique_visitors)} хүн · ${fmt(rs.repeat_visits)} давтан` : 'ReID тайлан ирээгүй', ico: 'pulse', c: 7 }) : '',
-        wOn('k_uniq') ? kpi({ label: 'Давхардалгүй хүн', value: rHas ? fmt(rs.unique_visitors) : '—',
-          sub: rHas ? `${fmt(rs.repeat_visitors)} нь дахин ирсэн` : 'ReID тайлан ирээгүй', ico: 'users', c: 3 }) : '',
-        wOn('k_rep') ? kpi({ label: 'Давтан зочлолт', value: rHas ? fmt(rs.repeat_visits) : '—',
-          sub: rHas ? `бодит урсгалын ${pct(rs.repeat_visits, rs.effective_traffic)}` : 'ReID тайлан ирээгүй', ico: 'back', c: 4 }) : '',
       ].join(''));
       // 1 хоног → 30 минутын мөрүүдээс өөрсдөө нэгтгэнэ; бусад үед серверийн нэгтгэсэн
       // цуваа (ov.series) — мөрийн хязгаараас болж тайрагдахгүй.
