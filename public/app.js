@@ -1014,7 +1014,7 @@ POST ${O}/api/camera/dup          — өдрийн DUP (realtime + final) тай
 
   // Системээс авч болох бүх тоог нэг CSV-д хэсэг хэсгээр нь буулгана.
   // meta = { title, tenant, range, loc, dev }, ov = /dash/overview, rows = 30 минутын мөрүүд
-  function fullReportCsv(meta, ov, rows, heat, dedup, reid) {
+  function fullReportCsv(meta, ov, rows, heat, dedup) {
     const t = ov.totals, s = sumRows(rows);
     const gT = s.male + s.female + s.unknown;
     const aT = s.age.reduce((a, b) => a + b, 0), hT = s.hgt.reduce((a, b) => a + b, 0);
@@ -1070,24 +1070,6 @@ POST ${O}/api/camera/dup          — өдрийн DUP (realtime + final) тай
       sec('ДАВХАРДАЛГҮЙ — ӨДРӨӨР', ['Огноо', 'Master SN', 'Чиглэл', 'Түүхий', 'Давхардал', 'Давхардалгүй', 'Зочин', 'Зочин бус', 'Эцсийн тайлан']);
       (dedup.reports || []).forEach((r) => L.push(csvRow([String(r.report_date).slice(0, 10), r.master_sn, r.direction,
         r.raw_count, r.duplicate_count, r.deduped_count, r.customer_count, r.non_customer_count, r.is_final ? 'Тийм' : 'Үгүй'])));
-    }
-
-    // ReID — нэг хүнийг өдрийн турш дагаж таньсан тайлан (давтан ирэлт энд л гарна)
-    const rs = reid && reid.summary;
-    if (reid && (reid.reports || []).length) {
-      sec('REID — ДАВХАРДАЛГҮЙ ХҮН', ['Үзүүлэлт', 'Утга', 'Нэгж']);
-      [['Бодит урсгал (нийт зочлолт)', rs.effective_traffic, 'зочлолт'],
-        ['Давхардалгүй хүн', rs.unique_visitors, 'хүн'], ['Давтан зочлолт', rs.repeat_visits, 'зочлолт'],
-        ['Дахин ирсэн хүн', rs.repeat_visitors, 'хүн'], ['Дундаж зочлолт', rs.avg_visits, 'удаа/хүн'],
-        ['Дундаж байсан хугацаа', rs.avg_dwell_ms, 'мс'],
-        ['Зочин', rs.customers, 'хүн'], ['Ажилтан', rs.staff, 'хүн'], ['Rider/Courier', rs.riders_couriers, 'хүн'],
-        ['Эрэгтэй', rs.male, 'хүн'], ['Эмэгтэй', rs.female, 'хүн'],
-        ['Насанд хүрэгч', rs.adults, 'хүн'], ['Хүүхэд', rs.children, 'хүн'],
-      ].forEach((r) => L.push(csvRow(r)));
-      sec('REID — БАЙСАН ХУГАЦААНЫ ТАРХАЛТ', ['Хугацаа', 'Хүн']);
-      (reid.dwell_distribution || []).forEach((r) => L.push(csvRow([r.bucket, r.n])));
-      sec('REID — ӨДРӨӨР', ['Огноо', 'Давхардалгүй хүн', 'Зочин']);
-      (reid.daily || []).forEach((r) => L.push(csvRow([String(r.report_date).slice(0, 10), r.unique_visitors, r.customers])));
     }
 
     sec('ТӨХӨӨРӨМЖӨӨР', ['Төхөөрөмж', 'SN', 'Байршил', 'Төлөв', 'Орсон', 'Гарсан', 'Өнгөрсөн', 'Буцсан']);
@@ -1420,14 +1402,14 @@ POST ${O}/api/camera/dup          — өдрийн DUP (realtime + final) тай
       try { [ov, heat] = await Promise.all([api('/dash/overview' + qs2 + '&granularity=day'), api('/dash/flow/heatmap' + qs2)]); }
       catch (err) { return toast(err.message, 'error'); }
       // DUP тайлан заавал байдаггүй (өдрийн эцэст ирдэг) тул амжилтгүй бол тайланг тасалдуулахгүй
-      const [dedup, reid] = await Promise.all([api('/dash/dedup' + qs2).catch(() => null), api('/dash/reid' + qs2).catch(() => null)]);
+      const dedup = await api('/dash/dedup' + qs2).catch(() => null);
       const meta = {
         tenant: state.tenant ? state.tenant.name : 'Бүх байгууллага',
         range: `${f.from} .. ${f.to}`,
         loc: 'Бүх байршил', dev: 'Бүх төхөөрөмж',
         note: 'Хүснэгтийн баганын шүүлтүүр энэ файлд нөлөөлөхгүй — зөвхөн огнооны муж хамаарна.',
       };
-      downloadCsv(`footfall_${f.from}_${f.to}.csv`, fullReportCsv(meta, ov, rows, heat, dedup, reid));
+      downloadCsv(`footfall_${f.from}_${f.to}.csv`, fullReportCsv(meta, ov, rows, heat, dedup));
       toast(`${fmt(rows.length)} мөр бүхий бүрэн тайлан татагдлаа`);
     });
     const clock = () => setText('dtClock', clockText());
