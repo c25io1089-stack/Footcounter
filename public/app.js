@@ -596,14 +596,6 @@ Interface (анхдагч зөв бол хөндөхгүй):
     ['Картууд', [['c_flow', 'Урсгалын график'], ['c_prof', 'Зочны бүтэц'], ['c_heat', 'Өдөр × цагийн нягтрал']]],
     ['Зочны бүтцийн багана', [['p_gender', 'Хүйс'], ['p_ac', 'Насанд хүрэгч / Хүүхэд'], ['p_age', 'Насны бүлэг'], ['p_h', 'Өндөр']]],
   ];
-  // Зочны бүтцийн эх сурвалж: orig = төхөөрөмжийн түүхий тоолол (Original Traffic),
-  // eff = DUP тайлангийн давхардал арилгасан тоо (Effective Traffic). Төхөөрөмжийн
-  // өөрийн хуудасны сэлгүүртэй ижил утгатай.
-  const PM_KEY = 'footfall.profMode';
-  const pmGet = () => { try { return localStorage.getItem(PM_KEY) === 'eff' ? 'eff' : 'orig'; } catch { return 'orig'; } };
-  const pmSet = (m) => { try { localStorage.setItem(PM_KEY, m); } catch { /* private mode */ } };
-  // DUP тайлангийн насны бүлгийг самбарын бүлэгт буулгана (0-9 ба 10-16 → 0-16)
-  const AGE_TO_BAND = { '0_9': '0_16', '10_16': '0_16', '17_30': '17_30', '31_45': '31_45', '46_60': '46_60', '61_plus': '61p', unknown: 'unknown' };
   const W_KEY = 'footfall.widgets';
   const wOff = new Set((() => { try { return JSON.parse(localStorage.getItem(W_KEY)) || []; } catch { return []; } })());
   const wOn = (id) => !wOff.has(id);
@@ -1455,15 +1447,12 @@ POST ${O}/api/camera/dup          — өдрийн DUP (realtime + final) тай
   // ================= ХЯНАЛТЫН САМБАР =================
   async function pageDashboard() {
     if (!state.devices.length) return renderOnboarding();
-    const pm = pmGet();
     $('#page').innerHTML = `
       <div id="dbNotice"></div>
       ${DB_W.flatMap(([, items]) => items.map((x) => x[0])).some(wOn) ? '' : `<div class="card empty-state"><div class="ico">${icon('alert')}</div><b>Бүх үзүүлэлт унтраалттай байна</b><p>Дээд талын «Үзүүлэлт» товчийг дарж самбартаа юу харахаа сонгоно уу.</p></div>`}
       <div class="grid g-kpi hero" id="dbKpi"></div>
       ${wOn('c_flow') ? `<div class="card section"><div class="head"><h2 id="dbFlowTitle">Урсгал</h2><span class="sub" id="dbFlowSub"></span></div><div class="chart-wrap"><canvas id="cFlow30"></canvas></div></div>` : ''}
-      ${wOn('c_prof') && wProfCols.some(wOn) ? `<div class="card section"><div class="head"><h2>Зочны бүтэц</h2>
-        <div class="seg sm" id="dbPm"><button data-m="orig" class="${pm === 'orig' ? 'active' : ''}" title="Төхөөрөмжийн түүхий тоолол">Анхдагч</button><button data-m="eff" class="${pm === 'eff' ? 'active' : ''}" title="DUP тайлангийн давхардал арилгасан тоо">Давхардалгүй</button></div>
-        <span class="sub" id="dbProfSub"></span></div>
+      ${wOn('c_prof') && wProfCols.some(wOn) ? `<div class="card section"><div class="head"><h2>Зочны бүтэц</h2><span class="sub" id="dbProfSub"></span></div>
         <div class="grid g-3">
           ${wOn('p_gender') ? `<div class="prof"><h3>Хүйс</h3>
             <div class="chart-wrap donut"><canvas id="cGender"></canvas></div>
@@ -1473,27 +1462,10 @@ POST ${O}/api/camera/dup          — өдрийн DUP (realtime + final) тай
             <div class="legend" style="margin-top:10px" id="dbAcLegend"></div></div>` : ''}
           ${wOn('p_age') ? `<div class="prof"><h3>Насны бүлэг <span class="sub muted" id="dbAgeSub"></span></h3>
             <div class="chart-wrap bar6"><canvas id="cAge"></canvas></div></div>` : ''}
-          ${wOn('p_h') ? (pm === 'eff'
-            ? `<div class="prof"><h3>Зочин / Зочин бус <span class="sub muted" id="dbHgtSub"></span></h3>
-                 <div class="chart-wrap bar5"><canvas id="cHeight"></canvas></div></div>`
-            : `<div class="prof"><h3>Өндөр <span class="sub muted" id="dbHgtSub"></span></h3>
-                 <div class="chart-wrap bar5"><canvas id="cHeight"></canvas></div></div>`) : ''}
+          ${wOn('p_h') ? `<div class="prof"><h3>Өндөр <span class="sub muted" id="dbHgtSub"></span></h3>
+            <div class="chart-wrap bar5"><canvas id="cHeight"></canvas></div></div>` : ''}
         </div></div>` : ''}
       ${wOn('c_heat') ? `<div class="card section"><div class="head"><h2>Долоо хоногийн өдөр × цаг</h2><span class="sub">орсон хүний нягтрал</span></div><div id="heat"></div></div>` : ''}`;
-    // DUP нь өдөрт нэг ирдэг тайлан тул 10 секунд тутам дахин татах утгагүй.
-    // Шүүлтүүр солигдвол render() дахин дуудагдаж энэ кэш шинээр эхэлнэ.
-    const DAILY_TTL = 3e5;
-    const daily = {};
-    const getDaily = async (key, path) => {
-      const e = daily[key];
-      if (e && Date.now() - e.at < DAILY_TTL) return e.v;
-      let v = null;
-      try { v = await api(path + qs()); } catch { v = e ? e.v : null; }
-      daily[key] = { v, at: Date.now() };
-      return v;
-    };
-    const pmBtns = $('#dbPm');
-    if (pmBtns) pmBtns.onclick = (e) => { const b = e.target.closest('[data-m]'); if (!b || b.dataset.m === pm) return; pmSet(b.dataset.m); render(); };
     let prev = null, heatDone = false;
     async function tick() {
       if (document.hidden || state.page !== 'dashboard') return;
@@ -1512,9 +1484,6 @@ POST ${O}/api/camera/dup          — өдрийн DUP (realtime + final) тай
         if (!heatDone && $('#heat')) { renderHeat(out[out.length - 1]); heatDone = true; }
       } catch (e) { setText('dbFlowSub', 'Холболт тасарсан: ' + esc(e.message)); return; }
       if (state.page !== 'dashboard' || !$('#dbKpi')) return;
-      // Давхардалгүй горимд DUP тайлан нэмж хэрэгтэй (өдрийн эцэст ирдэг тусдаа багц)
-      let dedup = null;
-      if (pm === 'eff') dedup = await getDaily('dedup', '/dash/dedup');
       const t = ov.totals, s = sumRows(data.rows);
       const online = ov.by_device.filter((d) => d.online).length, total = ov.by_device.length, offline = total - online;
       setText('dbNotice', offline ? `<div class="notice warn"><b>${offline} төхөөрөмж offline</b> — тоо дутуу байж болзошгүй. <a href="#devices">Төхөөрөмж хуудсанд шалгах →</a></div>` : '');
@@ -1557,43 +1526,17 @@ POST ${O}/api/camera/dup          — өдрийн DUP (realtime + final) тай
           plugins: { legend: { position: 'top', align: 'end' }, lineEnds: { color: css('--text-2') } } },
         plugins: [lineEnds] });
       }
-      // Эх сурвалж нь горимоос хамаарна. Анхдагч = хүн бүрийн шинж (person_events) ба
-      // төхөөрөмжийн интервалын тоо. Давхардалгүй = DUP тайлангийн нэгтгэл. Хоёр багц нь
-      // өөр тоо тул хольж харуулахгүй — сэлгүүрээр нь бүхэлд нь солино.
-      const ag = dedup && dedup.aggregate;
-      let P;
-      if (pm === 'eff') {
-        const byBand = {}; A_BANDS.forEach(([k]) => { byBand[k] = 0; });
-        let gm = 0, gf = 0, gu = 0;
-        for (const [k, v] of Object.entries((ag && ag.age_gender) || {})) {
-          const band = AGE_TO_BAND[k] || 'unknown';
-          byBand[band] = (byBand[band] || 0) + (v.male || 0) + (v.female || 0) + (v.unknown || 0);
-          gm += v.male || 0; gf += v.female || 0; gu += v.unknown || 0;
-        }
-        const cu = ag ? ag.customer : 0, ncu = ag ? ag.non_customer : 0;
-        P = {
-          sub: ag && ag.deduped ? `${fmt(ag.deduped)} давхардалгүй · ${fmt(ag.raw)}-аас ${fmt(ag.duplicate)} давхардал хасав` : 'DUP тайлан ирээгүй',
-          gender: [gm, gf, gu], genderSub: 'зочин',
-          ac: [ag ? ag.adult : 0, ag ? ag.child : 0, ag ? ag.unknown_h : 0], acSub: 'зочин',
-          age: A_BANDS.map(([k]) => byBand[k] || 0),
-          fourth: { bands: [['c', 'Зочин'], ['s', 'Ажилтан'], ['r', 'Rider'], ['co', 'Courier']],
-            data: [cu, ag ? ag.staff : 0, ag ? ag.rider : 0, ag ? ag.courier : 0],
-            ramp: '--c1', sub: cu + ncu ? `${fmt(cu + ncu)} хүн · ${fmt(ncu)} зочин бус` : 'өгөгдөл алга' },
-        };
-      } else {
-        const ad = t.in_adult || 0, ch = t.in_child || 0;
-        const gT0 = s.male + s.female + s.unknown;
-        const hT0 = s.hgt.reduce((a, b) => a + b, 0) - s.hgt[H_BANDS.length - 1];
-        P = {
-          sub: gT0 ? `${fmt(gT0)} зочны танигдсан шинж` : 'өгөгдөл алга',
-          gender: [s.male, s.female, s.unknown], genderSub: 'зочин',
-          ac: [ad, ch, Math.max(0, (t.in_count || 0) - ad - ch)], acSub: 'орсон',
-          age: s.age,
-          fourth: { bands: H_BANDS, data: s.hgt, ramp: ['--h1', '--h2', '--h3', '--h4'],
-            sub: hT0 ? `${fmt(hT0)} зочин · дундаж ${s.people ? Math.round(s.hsum / s.people) : '—'} см` : 'өгөгдөл алга' },
-        };
-      }
-      setText('dbProfSub', P.sub);
+      // Насанд хүрэгч/хүүхэд: төхөөрөмж интервал бүртээ илгээдэг тул хүн бүрийн шинжээс
+      // хамаарахгүй, орсон хүн бүрийг хамардаг. Үлдэгдлийг «Тодорхойгүй» гэж шударгаар харуулна.
+      const ad = t.in_adult || 0, ch = t.in_child || 0;
+      const gT0 = s.male + s.female + s.unknown;
+      const hT0 = s.hgt.reduce((a, b) => a + b, 0) - s.hgt[H_BANDS.length - 1];
+      const P = {
+        gender: [s.male, s.female, s.unknown],
+        ac: [ad, ch, Math.max(0, (t.in_count || 0) - ad - ch)], acSub: 'орсон',
+        hgtSub: hT0 ? `${fmt(hT0)} зочин · дундаж ${s.people ? Math.round(s.hsum / s.people) : '—'} см` : 'өгөгдөл алга',
+      };
+      setText('dbProfSub', gT0 ? `${fmt(gT0)} зочны танигдсан шинж` : 'өгөгдөл алга');
       const donut = (id, vals, labels, colors, subWord, legendId) => {
         const tot = vals.reduce((a, b) => a + b, 0);
         if (legendId) setText(legendId, labels.map((lb, i) => `<span style="--c:var(${colors[i]})">${lb} ${fmt(vals[i])} (${pct(vals[i], tot)})</span>`).join(''));
@@ -1605,7 +1548,7 @@ POST ${O}/api/camera/dup          — өдрийн DUP (realtime + final) тай
       const acT = P.ac.reduce((a, b) => a + b, 0);
       setText('dbAcSub', acT ? `${fmt(acT)} ${P.acSub}` : 'өгөгдөл алга');
       donut('cAdultChild', P.ac, ['Насанд хүрэгч', 'Хүүхэд', 'Тодорхойгүй'], ['--c1', '--c3', '--c-ctx'], P.acSub, 'dbAcLegend');
-      donut('cGender', P.gender, ['Эрэгтэй', 'Эмэгтэй', 'Тодорхойгүй'], ['--c1', '--c4', '--c-ctx'], P.genderSub, 'dbGenLegend');
+      donut('cGender', P.gender, ['Эрэгтэй', 'Эмэгтэй', 'Тодорхойгүй'], ['--c1', '--c4', '--c-ctx'], 'зочин', 'dbGenLegend');
       // Нас, өндөр: эрэмбэтэй бүлэг тул нэг өнгийн шатлал (цайнаас бараан) — өөр өөр өнгө
       // өгвөл баганын уртыг өнгөөр давхар кодолж, өнгө нь утгагүй болно. «Тодорхойгүй» нь
       // эрэмбэд ордоггүй тул саарал; таних чанар хэр байгааг харуулах тул 0 байсан ч гарна.
@@ -1615,10 +1558,10 @@ POST ${O}/api/camera/dup          — өдрийн DUP (realtime + final) тай
         setText(sub, total ? `${fmt(total)} зочин` : 'өгөгдөл алга');
         // Багануудын бүрэлдэхүүн өөрчлөгдвөл (жишээ нь «Тодорхойгүй» шинээр гарч ирвэл)
         // өнгө нь мөрдөө таарахгүй болох тул зөвхөн ижил бүрэлдэхүүнтэй үед шинэчилнэ
-        const key = keep.join(',') + '|' + bands.map((b) => b[1]).join('|');
+        const key = keep.join(',');
         if (charts[id] && charts[id].$bandKey === key) { setChart(id, null, [vals]); return; }
         mk(id, { type: 'bar', data: { labels: keep.map((i) => bands[i][1]), datasets: [{ label: 'Зочин', data: vals, maxBarThickness: 18,
-          backgroundColor: keep.map((i) => css(typeof ramp === 'string' ? ramp : (i === bands.length - 1 ? '--c-ctx' : ramp[i]))) }] },
+          backgroundColor: keep.map((i) => css(i === bands.length - 1 ? '--c-ctx' : ramp[i])) }] },
           options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, animation: false,
             // Үзүүрийн шошгод яг хэрэгтэй зайг хэмжиж үлдээнэ — багана нарийсахад ч тоо нь багтана
             layout: { padding: { right: labelPad(vals, total) } },
@@ -1627,9 +1570,9 @@ POST ${O}/api/camera/dup          — өдрийн DUP (realtime + final) тай
           plugins: [barValues] });
         if (charts[id]) charts[id].$bandKey = key;
       };
-      bandChart('cAge', A_BANDS, P.age, ['--o1', '--o2', '--o3', '--o4', '--o5'], 'dbAgeSub');
-      bandChart('cHeight', P.fourth.bands, P.fourth.data, P.fourth.ramp, 'dbHgtSub');
-      setText('dbHgtSub', P.fourth.sub);
+      bandChart('cAge', A_BANDS, s.age, ['--o1', '--o2', '--o3', '--o4', '--o5'], 'dbAgeSub');
+      bandChart('cHeight', H_BANDS, s.hgt, ['--h1', '--h2', '--h3', '--h4'], 'dbHgtSub');
+      setText('dbHgtSub', P.hgtSub);
       const lu = $('#lastUpd'); if (lu) lu.textContent = 'Шинэчилсэн ' + clockText();
     }
     await tick();

@@ -178,9 +178,6 @@ input::placeholder { color: var(--muted); }
 .seg button { border: 0; background: transparent; padding: 0 11px; border-radius: 6px; cursor: pointer; color: var(--text-2); font-weight: 500; transition: background .15s, color .15s; white-space: nowrap; flex: none; font-size: 13px; }
 .seg button:hover { color: var(--text); }
 .seg button.active { background: var(--text); color: var(--surface); font-weight: 600; }
-/* Картын толгойд суух жижиг сэлгүүр — гарчгийн хажууд наалдаж, дэд бичиг баруун талдаа үлдэнэ */
-.seg.sm { height: 30px; padding: 2px; border-radius: 8px; box-shadow: none; margin-right: auto; overflow: visible; }
-.seg.sm button { padding: 0 9px; font-size: 12px; }
 .filters { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .filters select { max-width: 200px; }
 
