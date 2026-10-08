@@ -249,7 +249,7 @@
     killCharts();
     app.innerHTML = `<div class="login">
       <aside class="hero">
-        <div class="brand"><div class="logo">F</div><div><b>Footfall</b><small>Хүний урсгалын систем</small></div></div>
+        <div class="brand"><div class="logo" aria-hidden="true"></div><div><b>Footfall</b><small>Хүний урсгалын систем</small></div></div>
         <div>
           <h2>Дэлгүүрийнхээ урсгалыг<br>тоогоор удирд.</h2>
           <p>HX-CCD21 3D AI тоологчоос ирэх орсон, гарсан, өнгөрсөн хүний тоо, зочны нас, хүйс, давхардалгүй зочид — олон байршил, бодит цагт.</p>
@@ -262,7 +262,7 @@
         <div class="foot">© ${new Date().getFullYear()} Footfall · Chipmo</div>
       </aside>
       <div class="pane"><div class="card">
-        <div class="brand"><div class="logo">F</div><div><b>Footfall</b><small>Хүний урсгалын систем</small></div></div>
+        <div class="brand"><div class="logo" aria-hidden="true"></div><div><b>Footfall</b><small>Хүний урсгалын систем</small></div></div>
         <h1>Нэвтрэх</h1><p>Бүртгэлтэй и-мэйл, нууц үгээ оруулна уу.</p>
         <form class="form" id="loginForm" novalidate>
           <label>И-мэйл<input type="email" name="email" required autocomplete="username" placeholder="name@company.mn" autofocus></label>
@@ -299,7 +299,7 @@
     const isSuper = state.user.role === 'superadmin';
     app.innerHTML = `<div class="shell">
       <aside class="sidebar">
-        <div class="brand"><div class="logo">F</div><div><b>Footfall</b><small>Хүний урсгалын систем</small></div></div>
+        <div class="brand"><div class="logo" aria-hidden="true"></div><div><b>Footfall</b><small>Хүний урсгалын систем</small></div></div>
         <div class="ws"><span class="dot"></span><b>${esc(state.tenant ? state.tenant.name : 'Бүх байгууллага')}</b><small>${isSuper ? 'superadmin' : 'workspace'}</small></div>
         <div class="nav-label">Цэс</div>
         <nav class="nav">${NAV.map(([k, t, d]) => `<a href="#${k}" data-page="${k}"><svg viewBox="0 0 24 24" fill="currentColor"><path d="${d}"/></svg><span>${t}</span></a>`).join('')}</nav>
